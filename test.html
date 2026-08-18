@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>저장 테스트</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; background:#FAF9F6; color:#2A2622; line-height:1.6; }
+  .box { background:#fff; border:1px solid #ddd; border-radius:8px; padding:14px; margin-bottom:12px; white-space:pre-wrap; word-break:break-all; font-size:13px; }
+  .ok { color:#2C8C7F; font-weight:bold; }
+  .fail { color:#B23A32; font-weight:bold; }
+  button { padding:10px 16px; border-radius:6px; border:none; background:#2E3153; color:#fff; font-size:14px; margin-bottom:16px; }
+</style>
+</head>
+<body>
+<h2>npoint 저장 테스트</h2>
+<button onclick="runTest()">테스트 시작</button>
+<div id="log"></div>
+
+<script>
+const DATA_URL = "https://api.npoint.io/b1e82724d029cc520ad3";
+const log = document.getElementById("log");
+function addLine(text, cls){
+  const d = document.createElement("div");
+  d.className = "box" + (cls ? " " + cls : "");
+  d.textContent = text;
+  log.appendChild(d);
+}
+
+async function runTest(){
+  log.innerHTML = "";
+  addLine("1) 현재 서버 데이터 불러오는 중...");
+  try {
+    const res1 = await fetch(DATA_URL, { headers: { "Accept": "application/json" } });
+    const data1 = await res1.json();
+    addLine("✅ 불러오기 성공: " + JSON.stringify(data1), "ok");
+  } catch (e) {
+    addLine("❌ 불러오기 실패: " + e.message, "fail");
+    return;
+  }
+
+  const testValue = "테스트-" + Date.now();
+  addLine("2) 테스트 값 저장 시도: " + testValue);
+  try {
+    const res2 = await fetch(DATA_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ events: [], ddays: [], _test: testValue }),
+    });
+    addLine("PUT 응답 상태 코드: " + res2.status);
+    if (!res2.ok) throw new Error("status " + res2.status);
+    addLine("✅ 저장 요청 성공", "ok");
+  } catch (e) {
+    addLine("❌ 저장 실패: " + e.message, "fail");
+    addLine("→ 이 오류가 뜨면 npoint 저장(PUT) 자체가 막힌 거예요. 다른 저장소로 바꿔야 해요.", "fail");
+    return;
+  }
+
+  addLine("3) 다시 불러와서 저장이 실제로 반영됐는지 확인 중...");
+  try {
+    const res3 = await fetch(DATA_URL + "?t=" + Date.now(), { headers: { "Accept": "application/json" } });
+    const data3 = await res3.json();
+    if (data3._test === testValue) {
+      addLine("✅✅✅ 저장이 정상적으로 반영됐어요! npoint는 문제 없어요.\n" + JSON.stringify(data3), "ok");
+    } else {
+      addLine("❌ 저장은 성공했다고 나왔지만, 실제로는 반영이 안 됐어요.\n" + JSON.stringify(data3), "fail");
+    }
+  } catch (e) {
+    addLine("❌ 확인용 재조회 실패: " + e.message, "fail");
+  }
+}
+</script>
+</body>
+</html>
