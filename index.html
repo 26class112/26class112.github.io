@@ -25,7 +25,9 @@
    학생들은 새로고침하면 그 데이터를 자동으로 불러와요.
    GitHub에 다시 올릴 필요 없어요.
    ========================================================================= */
-const DATA_URL = "https://api.npoint.io/b1e82724d029cc520ad3";
+const BIN_ID = "6a843962da38895dfef25639";
+const API_KEY = "$2a$10$P2WtaLldQWuUHzPlezDzwOvssikwdRmYAjlEgTGs0D2EeiUcT7Dwm";
+const DATA_URL = "https://api.jsonbin.io/v3/b/" + BIN_ID;
 /* ========================================================================= */
 
 const CATEGORIES = [
@@ -77,10 +79,12 @@ const S = {
   loadError: false,
 };
 
-/* ---- npoint 자동 불러오기/저장 ---- */
+/* ---- jsonbin.io 자동 불러오기/저장 ---- */
 async function loadFromServer(){
   try {
-    const res = await fetch(DATA_URL, { headers: { "Accept": "application/json" } });
+    const res = await fetch(DATA_URL + "/latest", {
+      headers: { "X-Master-Key": API_KEY, "X-Bin-Meta": "false" },
+    });
     if (!res.ok) throw new Error("fetch failed");
     const data = await res.json();
     S.events = Array.isArray(data.events) ? data.events : [];
@@ -96,7 +100,7 @@ async function saveToServer(){
   try {
     const res = await fetch(DATA_URL, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
       body: JSON.stringify({ events: S.events, ddays: S.ddays }),
     });
     if (!res.ok) throw new Error("save failed");
