@@ -3,13 +3,42 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>안산강서고 1-12</title>
+<title>2026 안산강서고 1-12</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap');
   * { font-family: 'Gowun Dodum', sans-serif; box-sizing: border-box; }
-  body { background:#FAF9F6; color:#2A2622; margin:0; }
+
+  :root[data-theme="light"] {
+    --bg: #ffffff;
+    --bg-soft: #f7f6f3;
+    --card: #ffffff;
+    --border: #e9e7e2;
+    --text: #37352f;
+    --text-soft: #6b6a66;
+    --text-faint: #9b9a97;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 6px rgba(0,0,0,0.03);
+  }
+  :root[data-theme="dark"] {
+    --bg: #191919;
+    --bg-soft: #202020;
+    --card: #252525;
+    --border: #373737;
+    --text: #e7e6e4;
+    --text-soft: #a3a2a0;
+    --text-faint: #7c7b79;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 8px rgba(0,0,0,0.25);
+  }
+  body { background:var(--bg); color:var(--text); margin:0; transition:background .15s,color .15s; }
+  .surface { background:var(--card); }
+  .surface-soft { background:var(--bg-soft); }
+  .border-base { border-color:var(--border) !important; }
+  .text-base { color:var(--text); }
+  .text-soft { color:var(--text-soft); }
+  .text-faint { color:var(--text-faint); }
   input[type="color"] { padding:0; cursor:pointer; }
+  input, textarea, select { background:var(--card); color:var(--text); border-color:var(--border) !important; }
+  input::placeholder, textarea::placeholder { color:var(--text-faint); }
   @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
 </style>
 </head>
@@ -18,25 +47,27 @@
 <div id="modal-root"></div>
 
 <script>
-/* =========================================================================
-   데이터 저장소: npoint.io (무료 온라인 저장소, CORS 지원)
-   -------------------------------------------------------------------------
-   관리자가 일정/디데이를 추가·수정·삭제하면 자동으로 이 주소에 저장되고,
-   학생들은 새로고침하면 그 데이터를 자동으로 불러와요.
-   GitHub에 다시 올릴 필요 없어요.
-   ========================================================================= */
+/* ---- jsonbin.io 저장소 ---- */
 const BIN_ID = "6a843962da38895dfef25639";
 const API_KEY = "$2a$10$P2WtaLldQWuUHzPlezDzwOvssikwdRmYAjlEgTGs0D2EeiUcT7Dwm";
 const DATA_URL = "https://api.jsonbin.io/v3/b/" + BIN_ID;
-/* ========================================================================= */
 
+/* ---- 노션풍 태그 색상 팔레트 ---- */
+const NOTION_COLORS = {
+  orange:{ lbg:"#FAEBDD", ltext:"#B4620F", dbg:"#4a3320", dtext:"#e8a561" },
+  purple:{ lbg:"#F6F3F9", ltext:"#8A67AB", dbg:"#392f47", dtext:"#c39ee0" },
+  yellow:{ lbg:"#FBF3DB", ltext:"#A9821A", dbg:"#4a3f1c", dtext:"#e0c46c" },
+  red:   { lbg:"#FDEBEC", ltext:"#C4554D", dbg:"#452321", dtext:"#e5837a" },
+  green: { lbg:"#EDF3EC", ltext:"#4C7A5C", dbg:"#22362b", dtext:"#7cc99a" },
+  blue:  { lbg:"#E7F3F8", ltext:"#3E76A0", dbg:"#1c3547", dtext:"#7bb4dd" },
+};
 const CATEGORIES = [
-  { key: "homework", label: "숙제", color: "#D98A2B", checkable: true },
-  { key: "notice", label: "가정통신문", color: "#6B5FAE", checkable: true },
-  { key: "eval", label: "수행평가", color: "#C15A42", checkable: false },
-  { key: "exam", label: "정기고사", color: "#A1332B", checkable: false },
-  { key: "event", label: "행사", color: "#2C8C7F", checkable: false },
-  { key: "alert", label: "알림", color: "#3E7CB1", checkable: false },
+  { key: "homework", label: "숙제", tone:"orange", color: "#D98A2B", checkable: true },
+  { key: "notice", label: "가정통신문", tone:"purple", color: "#6B5FAE", checkable: true },
+  { key: "eval", label: "수행평가", tone:"yellow", color: "#C15A42", checkable: false },
+  { key: "exam", label: "정기고사", tone:"red", color: "#A1332B", checkable: false },
+  { key: "event", label: "행사", tone:"green", color: "#2C8C7F", checkable: false },
+  { key: "alert", label: "알림", tone:"blue", color: "#3E7CB1", checkable: false },
 ];
 const SWATCHES = [
   "#D98A2B","#6B5FAE","#C15A42","#A1332B","#2C8C7F","#3E7CB1","#5B8A3C","#B45A9E",
@@ -50,6 +81,24 @@ const MIN_DATE_STR = "2026-08-01";
 const MAX_DATE_STR = "2027-03-31";
 const WEEKDAYS = ["일","월","화","수","목","금","토"];
 
+/* ---- 2026.8 ~ 2027.3 대한민국 법정 공휴일(기본 제공) ---- */
+const BUILTIN_HOLIDAYS = [
+  { date:"2026-08-15", label:"광복절" },
+  { date:"2026-09-24", label:"추석 연휴" },
+  { date:"2026-09-25", label:"추석" },
+  { date:"2026-09-26", label:"추석 연휴" },
+  { date:"2026-10-03", label:"개천절" },
+  { date:"2026-10-05", label:"대체공휴일(개천절)" },
+  { date:"2026-10-09", label:"한글날" },
+  { date:"2026-12-25", label:"크리스마스" },
+  { date:"2027-01-01", label:"신정" },
+  { date:"2027-02-06", label:"설날 연휴" },
+  { date:"2027-02-07", label:"설날" },
+  { date:"2027-02-08", label:"설날 연휴" },
+  { date:"2027-02-09", label:"대체공휴일(설날)" },
+  { date:"2027-03-01", label:"삼일절" },
+];
+
 function pad(n){ return String(n).padStart(2,"0"); }
 function fmt(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function parseDate(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
@@ -62,6 +111,14 @@ function clampToRange(y,m){
   if (y > RANGE_MAX.y || (y===RANGE_MAX.y && m>RANGE_MAX.m)) return {y:RANGE_MAX.y,m:RANGE_MAX.m};
   return {y,m};
 }
+function redDayLabel(dateStr){
+  const b = BUILTIN_HOLIDAYS.find(h=>h.date===dateStr);
+  if (b) return b.label;
+  const c = S.redDays.find(r=>r.date===dateStr);
+  if (c) return c.label;
+  return null;
+}
+function isRedDay(dateStr){ return !!redDayLabel(dateStr); }
 
 const today = new Date();
 const todayStr = fmt(today);
@@ -73,45 +130,42 @@ const S = {
   selectedDate: (todayStr>=MIN_DATE_STR && todayStr<=MAX_DATE_STR) ? todayStr : MIN_DATE_STR,
   events: [],
   ddays: [],
+  redDays: [],
+  banner: { lines: [] },
   isAdmin: false,
+  theme: localStorage.getItem("theme") === "dark" ? "dark" : "light",
   toast: "",
   loading: true,
-  loadError: false,
 };
+document.documentElement.setAttribute("data-theme", S.theme);
 
-/* ---- jsonbin.io 자동 불러오기/저장 ---- */
+/* ---- jsonbin 자동 불러오기/저장 ---- */
 async function loadFromServer(){
   try {
-    const res = await fetch(DATA_URL + "/latest", {
-      headers: { "X-Master-Key": API_KEY, "X-Bin-Meta": "false" },
-    });
+    const res = await fetch(DATA_URL + "/latest", { headers: { "X-Master-Key": API_KEY, "X-Bin-Meta": "false" } });
     if (!res.ok) throw new Error("fetch failed");
     const data = await res.json();
     S.events = Array.isArray(data.events) ? data.events : [];
     S.ddays = Array.isArray(data.ddays) ? data.ddays : [];
-    S.loadError = false;
-  } catch (e) {
-    S.loadError = true;
-  }
+    S.redDays = Array.isArray(data.redDays) ? data.redDays : [];
+    S.banner = data.banner && Array.isArray(data.banner.lines) ? data.banner : { lines: [] };
+  } catch (e) {}
   S.loading = false;
   render();
 }
 async function saveToServer(){
   try {
-    const res = await fetch(DATA_URL, {
+    await fetch(DATA_URL, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
-      body: JSON.stringify({ events: S.events, ddays: S.ddays }),
+      body: JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner }),
     });
-    if (!res.ok) throw new Error("save failed");
   } catch (e) {}
 }
-// 다른 사람이 추가한 일정을 주기적으로 반영 (모달이 열려있지 않을 때만)
 setInterval(()=>{
   const modalOpen = document.getElementById("modal-root") && document.getElementById("modal-root").innerHTML.trim()!=="";
   if (!modalOpen) loadFromServer();
 }, 20000);
-
 
 function showToast(msg){
   S.toast = msg;
@@ -124,7 +178,7 @@ function ddayCountdown(dateStr){
   const diff = diffDays(parseDate(todayStr), parseDate(dateStr));
   if (diff>0) return { text:`D-${diff}`, tone:"#2E3153" };
   if (diff===0) return { text:"D-DAY", tone:"#2C8C7F" };
-  return { text:"지남", tone:"#B5AD9C" };
+  return { text:"지남", tone:"#9b9a97" };
 }
 function buildWeeks(viewYear, viewMonth){
   const firstDow = new Date(viewYear, viewMonth, 1).getDay();
@@ -169,8 +223,9 @@ function eventsOnDate(dateStr){
 
 /* ---- 렌더링 ---- */
 function render(){
+  document.documentElement.setAttribute("data-theme", S.theme);
   if (S.loading){
-    document.getElementById("app").innerHTML = `<div class="max-w-2xl mx-auto px-5 py-16 text-center text-sm" style="color:#9A9284">불러오는 중...</div>`;
+    document.getElementById("app").innerHTML = `<div class="max-w-2xl mx-auto px-5 py-16 text-center text-sm text-faint">불러오는 중...</div>`;
     return;
   }
   const weeks = buildWeeks(S.viewYear, S.viewMonth);
@@ -183,19 +238,41 @@ function render(){
   const atMax = S.viewYear===RANGE_MAX.y && S.viewMonth===RANGE_MAX.m;
   const ddaySorted = [...S.ddays].sort((a,b)=> a.startDate<b.startDate?-1:1);
   const selectedEvents = eventsOnDate(S.selectedDate);
+  const selectedHoliday = redDayLabel(S.selectedDate);
 
   let html = `
   <div class="px-5 pt-7 pb-5 max-w-2xl mx-auto">
     <div class="flex items-center justify-between">
-      <h1 class="text-xl font-bold" style="color:#2E3153">안산강서고 1-12</h1>
-      ${S.isAdmin
-        ? `<button data-action="exit-admin" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full text-white" style="background:#6B5FAE">🔓 관리자</button>`
-        : `<button data-action="open-pw" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full" style="background:#EFEBE1;color:#6B6252">🔒 관리자</button>`}
+      <h1 class="text-xl font-bold text-base">2026 안산강서고 1-12</h1>
+      <div class="flex items-center gap-2">
+        <button data-action="toggle-theme" class="flex items-center justify-center rounded-full surface-soft border border-base" style="width:30px;height:30px">${S.theme==="dark" ? "☀️" : "🌙"}</button>
+        ${S.isAdmin
+          ? `<button data-action="exit-admin" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full text-white" style="background:#6B5FAE">🔓 관리자</button>`
+          : `<button data-action="open-pw" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full surface-soft text-soft border border-base">🔒 관리자</button>`}
+      </div>
     </div>
-    <div class="flex items-center justify-center gap-4 mt-5">
-      <button data-action="prev-month" ${atMin?"disabled":""} class="p-1.5 rounded-full" style="opacity:${atMin?0.3:1};background:#F1ECE0">‹</button>
-      <div class="text-lg font-bold w-32 text-center" style="color:#2E3153">${S.viewYear}년 ${S.viewMonth+1}월</div>
-      <button data-action="next-month" ${atMax?"disabled":""} class="p-1.5 rounded-full" style="opacity:${atMax?0.3:1};background:#F1ECE0">›</button>
+  </div>`;
+
+  // 고정 알림 배너
+  if (S.banner.lines.length>0 || S.isAdmin){
+    html += `<div class="max-w-2xl mx-auto px-5 mb-4">
+      <div class="rounded-lg p-3 surface border border-base" style="box-shadow:var(--shadow)">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-bold flex items-center gap-1 text-soft">📌 알림</span>
+          ${S.isAdmin ? `<button data-action="open-banner-manage" class="text-[11px] underline text-soft">편집</button>` : ""}
+        </div>
+        ${S.banner.lines.length>0
+          ? `<ul class="text-xs text-base" style="padding-left:16px;list-style:disc">${S.banner.lines.map(l=>`<li class="mb-0.5">${esc(l)}</li>`).join("")}</ul>`
+          : (S.isAdmin ? `<p class="text-xs text-faint">등록된 알림이 없어요.</p>` : "")}
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="max-w-2xl mx-auto px-5">
+    <div class="flex items-center justify-center gap-4 mb-4">
+      <button data-action="prev-month" ${atMin?"disabled":""} class="p-1.5 rounded-full surface-soft border border-base" style="opacity:${atMin?0.3:1}">‹</button>
+      <div class="text-lg font-bold w-32 text-center text-base">${S.viewYear}년 ${S.viewMonth+1}월</div>
+      <button data-action="next-month" ${atMax?"disabled":""} class="p-1.5 rounded-full surface-soft border border-base" style="opacity:${atMax?0.3:1}">›</button>
     </div>
   </div>`;
 
@@ -203,28 +280,28 @@ function render(){
   if (ddaySorted.length>0 || S.isAdmin){
     html += `<div class="max-w-2xl mx-auto px-5 mb-4">
       <div class="flex items-center justify-between mb-1.5">
-        <span class="text-xs font-bold" style="color:#8A8272">디데이</span>
+        <span class="text-xs font-bold text-soft">디데이</span>
         ${S.isAdmin ? `<button data-action="open-dday-manage" class="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full text-white" style="background:#2E3153">＋ 디데이 관리</button>` : ""}
       </div>
       ${ddaySorted.length>0 ? `<div class="flex gap-2 overflow-x-auto pb-1">${ddaySorted.map(item=>{
         const dd = ddayCountdown(item.startDate);
-        return `<div class="flex-shrink-0 rounded-lg px-3 py-2" style="background:#fff;border:1px solid #EEE7D8;border-left:4px solid ${item.color};min-width:108px">
+        return `<div class="flex-shrink-0 rounded-lg px-3 py-2 surface border border-base" style="border-left:4px solid ${item.color};min-width:108px;box-shadow:var(--shadow)">
           <div class="text-[11px] font-bold" style="color:${dd.tone}">${dd.text}</div>
-          <div class="text-xs mt-0.5 truncate" style="max-width:100px">${esc(item.emoji)} ${esc(item.title)}</div>
+          <div class="text-xs mt-0.5 truncate text-base" style="max-width:100px">${esc(item.emoji)} ${esc(item.title)}</div>
         </div>`;
-      }).join("")}</div>` : (S.isAdmin ? `<p class="text-xs" style="color:#C9C0AC">등록된 디데이가 없어요.</p>` : "")}
+      }).join("")}</div>` : (S.isAdmin ? `<p class="text-xs text-faint">등록된 디데이가 없어요.</p>` : "")}
     </div>`;
   }
 
   // Calendar
   html += `<div class="max-w-2xl mx-auto px-5">
     <div class="grid grid-cols-7 text-center text-xs mb-1">
-      ${WEEKDAYS.map((w,i)=>`<div class="py-1 font-bold" style="color:${i===0?'#B23A32':i===6?'#3355A0':'#B5AD9C'}">${w}</div>`).join("")}
+      ${WEEKDAYS.map((w,i)=>`<div class="py-1 font-bold" style="color:${i===0?'#C4554D':i===6?'#3E76A0':'var(--text-faint)'}">${w}</div>`).join("")}
     </div>
     <div class="flex flex-col gap-0.5">
       ${weeksWithBars.map(wk=>{
         const weekHasSelected = wk.week.some(c=>fmt(c.dateObj)===S.selectedDate);
-        return `<div class="rounded-md" style="background:${weekHasSelected?'#F4F1E8':'transparent'}">
+        return `<div class="rounded-md ${weekHasSelected?'surface-soft':''}">
           <div class="grid grid-cols-7">
             ${wk.week.map(cell=>{
               const dateStr = fmt(cell.dateObj);
@@ -232,8 +309,10 @@ function render(){
               const inRange = dateStr>=MIN_DATE_STR && dateStr<=MAX_DATE_STR;
               const isSelected = dateStr===S.selectedDate;
               const isToday = dateStr===todayStr;
+              const holiday = isRedDay(dateStr);
+              const numColor = isSelected ? '#fff' : holiday ? '#C4554D' : dow===0 ? '#C4554D' : dow===6 ? '#3E76A0' : 'var(--text)';
               return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="flex items-center justify-center py-1" style="opacity:${cell.inMonth&&inRange?1:0.28}">
-                <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full" style="color:${isSelected?'#fff':dow===0?'#B23A32':dow===6?'#3355A0':'#4A4438'};background:${isSelected?'#2E3153':'transparent'};font-weight:${isToday||isSelected?700:500};border:${isToday&&!isSelected?'1.5px solid #2E3153':'none'}">${cell.d}</span>
+                <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full" style="color:${numColor};background:${isSelected?'#2E3153':'transparent'};font-weight:${isToday||isSelected?700:500};border:${isToday&&!isSelected?'1.5px solid #2E3153':'none'}">${cell.d}</span>
               </button>`;
             }).join("")}
           </div>
@@ -248,34 +327,39 @@ function render(){
   // Day detail
   html += `<div class="max-w-2xl mx-auto px-5 mt-6">
     <div class="flex items-center justify-between mb-3">
-      <h2 class="text-base font-bold" style="color:#2E3153">${Number(S.selectedDate.split("-")[1])}월 ${Number(S.selectedDate.split("-")[2])}일</h2>
+      <div class="flex items-center gap-2">
+        <h2 class="text-base font-bold text-base">${Number(S.selectedDate.split("-")[1])}월 ${Number(S.selectedDate.split("-")[2])}일</h2>
+        ${selectedHoliday ? `<span class="text-xs font-bold px-2 py-0.5 rounded" style="background:${NOTION_COLORS.red.lbg};color:${NOTION_COLORS.red.ltext}">${esc(selectedHoliday)}</span>` : ""}
+        ${S.isAdmin ? `<button data-action="open-redday-manage" class="text-[11px] underline text-soft">빨간날 관리</button>` : ""}
+      </div>
       ${S.isAdmin ? `<button data-action="open-add-event" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full text-white" style="background:#2E3153">＋ 일정 추가</button>` : ""}
     </div>
     ${selectedEvents.length===0
-      ? `<p class="text-sm py-6 text-center rounded-lg" style="color:#B5AD9C;background:#F4F1E8">등록된 일정이 없어요.</p>`
+      ? `<p class="text-sm py-6 text-center rounded-lg surface-soft text-faint">등록된 일정이 없어요.</p>`
       : `<ul class="flex flex-col gap-2">${selectedEvents.map(ev=>{
           const cat = getCategory(ev.category);
+          const tone = NOTION_COLORS[cat.tone] || NOTION_COLORS.gray;
           const isRange = ev.startDate!==ev.endDate;
-          return `<li class="rounded-lg p-3 flex items-start gap-2" style="background:#fff;border:1px solid #EEE7D8;border-left:4px solid ${ev.color}">
+          return `<li class="rounded-lg p-3 flex items-start gap-2 surface border border-base" style="border-left:4px solid ${ev.color};box-shadow:var(--shadow)">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-[10px] px-1.5 py-0.5 rounded" style="background:#F1ECE0;color:#6B6252">${cat.label}</span>
-                ${(ev.tags||[]).map(t=>`<span class="text-[10px] px-1.5 py-0.5 rounded" style="background:#EFEAF7;color:#6B5FAE">#${esc(t)}</span>`).join("")}
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" style="background:${S.theme==='dark'?tone.dbg:tone.lbg};color:${S.theme==='dark'?tone.dtext:tone.ltext}">${cat.label}</span>
+                ${(ev.tags||[]).map(t=>`<span class="text-[10px] px-1.5 py-0.5 rounded text-soft surface-soft">#${esc(t)}</span>`).join("")}
               </div>
-              <div class="text-sm font-bold mt-1" style="color:#2A2622">${esc(ev.emoji)} ${esc(ev.title)}</div>
-              <div class="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap" style="color:#9A9284">
+              <div class="text-sm font-bold mt-1 text-base">${esc(ev.emoji)} ${esc(ev.title)}</div>
+              <div class="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap text-faint">
                 ${isRange?`<span>${ev.startDate.slice(5)} ~ ${ev.endDate.slice(5)}</span>`:""}
                 ${ev.hasTime?`<span>🕐 ${ev.startTime}${ev.endTime?` ~ ${ev.endTime}`:""}</span>`:""}
               </div>
-              ${ev.memo?`<p class="text-xs mt-1" style="color:#8A8272">${esc(ev.memo)}</p>`:""}
+              ${ev.memo?`<p class="text-xs mt-1 text-soft">${esc(ev.memo)}</p>`:""}
             </div>
             <div class="flex flex-col items-end gap-2 flex-shrink-0">
               ${S.isAdmin
                 ? `<div class="flex gap-1">
-                    <button data-action="open-edit-event" data-id="${ev.id}" class="p-1.5 rounded-md" style="background:#F4F1E8">✎</button>
+                    <button data-action="open-edit-event" data-id="${ev.id}" class="p-1.5 rounded-md surface-soft">✎</button>
                     ${S.confirmDeleteId===ev.id
                       ? `<button data-action="delete-event" data-id="${ev.id}" class="p-1.5 rounded-md text-white text-[10px] px-2" style="background:#B23A32">확인</button>`
-                      : `<button data-action="confirm-delete-event" data-id="${ev.id}" class="p-1.5 rounded-md" style="background:#F4F1E8">🗑</button>`}
+                      : `<button data-action="confirm-delete-event" data-id="${ev.id}" class="p-1.5 rounded-md surface-soft">🗑</button>`}
                   </div>`
                 : ""}
             </div>
@@ -299,6 +383,7 @@ document.addEventListener("click", (e)=>{
   if (action==="prev-month"){ if(!(S.viewYear===RANGE_MIN.y&&S.viewMonth===RANGE_MIN.m)){ if(S.viewMonth===0){S.viewMonth=11;S.viewYear--;} else S.viewMonth--; render(); } }
   else if (action==="next-month"){ if(!(S.viewYear===RANGE_MAX.y&&S.viewMonth===RANGE_MAX.m)){ if(S.viewMonth===11){S.viewMonth=0;S.viewYear++;} else S.viewMonth++; render(); } }
   else if (action==="select-date"){ S.selectedDate=date; S.confirmDeleteId=null; render(); }
+  else if (action==="toggle-theme"){ S.theme = S.theme==="dark" ? "light" : "dark"; localStorage.setItem("theme", S.theme); render(); }
   else if (action==="open-pw"){ openPasswordModal(); }
   else if (action==="exit-admin"){ S.isAdmin=false; render(); showToast("학생 보기로 돌아왔어요"); }
   else if (action==="open-add-event"){ openEventForm(null); }
@@ -306,20 +391,22 @@ document.addEventListener("click", (e)=>{
   else if (action==="confirm-delete-event"){ S.confirmDeleteId=id; render(); }
   else if (action==="delete-event"){ S.events=S.events.filter(ev=>ev.id!==id); saveToServer(); S.confirmDeleteId=null; render(); showToast("일정을 삭제했어요"); }
   else if (action==="open-dday-manage"){ openDdayManage(); }
+  else if (action==="open-redday-manage"){ openRedDayManage(); }
+  else if (action==="open-banner-manage"){ openBannerManage(); }
   else if (action==="close-modal"){ closeModal(); }
 });
 
 /* ---- 비밀번호 모달 ---- */
 function openPasswordModal(){
   document.getElementById("modal-root").innerHTML = `
-  <div class="fixed inset-0 flex items-center justify-center px-6 z-50" style="background:rgba(30,27,20,0.4)">
-    <div class="rounded-xl p-5 w-full max-w-xs" style="background:#FAF9F6">
+  <div class="fixed inset-0 flex items-center justify-center px-6 z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-xl p-5 w-full max-w-xs surface border border-base">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-base font-bold" style="color:#2E3153">관리자 로그인</h3>
-        <button data-action="close-modal">✕</button>
+        <h3 class="text-base font-bold text-base">관리자 로그인</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
       </div>
-      <input id="pw-input" type="password" placeholder="비밀번호" class="w-full rounded-md px-3 py-2 text-sm outline-none" style="border:1px solid #E4DDCC;background:#fff" autofocus />
-      <p id="pw-error" class="text-xs mt-1.5" style="color:#B23A32"></p>
+      <input id="pw-input" type="password" placeholder="비밀번호" class="w-full rounded-md px-3 py-2 text-sm outline-none border" autofocus />
+      <p id="pw-error" class="text-xs mt-1.5" style="color:#C4554D"></p>
       <button id="pw-submit" class="w-full mt-3 rounded-md py-2 text-sm text-white font-bold" style="background:#2E3153">들어가기</button>
     </div>
   </div>`;
@@ -350,65 +437,69 @@ function openEventForm(ev){
 function renderEventForm(){
   const f = FORM;
   document.getElementById("modal-root").innerHTML = `
-  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(30,27,20,0.4)">
-    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto" style="background:#FAF9F6;max-height:88vh">
+  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto surface border border-base" style="max-height:88vh">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-base font-bold" style="color:#2E3153">${f.id?"일정 수정":"일정 추가"}</h3>
-        <button data-action="close-modal">✕</button>
+        <h3 class="text-base font-bold text-base">${f.id?"일정 수정":"일정 추가"}</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
       </div>
       <div class="flex flex-col gap-3">
         <div>
-          <label class="text-xs" style="color:#8A8272">구분</label>
+          <label class="text-xs text-soft">구분</label>
           <div id="cat-buttons" class="flex flex-wrap gap-1.5 mt-1">
-            ${CATEGORIES.map(c=>`<button data-cat="${c.key}" data-color="${c.color}" class="cat-btn text-xs px-2.5 py-1.5 rounded-md font-bold" style="background:${f.category===c.key?'#2E3153':'#F1ECE0'};color:${f.category===c.key?'#fff':'#6B6252'}">${c.label}</button>`).join("")}
+            ${CATEGORIES.map(c=>{
+              const tone = NOTION_COLORS[c.tone];
+              const active = f.category===c.key;
+              return `<button data-cat="${c.key}" data-color="${c.color}" class="cat-btn text-xs px-2.5 py-1.5 rounded-full font-bold" style="background:${active?'#2E3153':(S.theme==='dark'?tone.dbg:tone.lbg)};color:${active?'#fff':(S.theme==='dark'?tone.dtext:tone.ltext)}">${c.label}</button>`;
+            }).join("")}
           </div>
         </div>
         <div class="flex gap-2">
           <div class="flex-1">
-            <label class="text-xs" style="color:#8A8272">이모지</label>
-            <input id="f-emoji" type="text" value="${esc(f.emoji)}" placeholder="📚" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" />
-            <div class="flex flex-wrap gap-1 mt-1.5">${EMOJI_PRESETS.map(e=>`<button data-emoji-pick="${e}" class="text-sm px-1.5 py-0.5 rounded" style="background:#F1ECE0">${e}</button>`).join("")}</div>
+            <label class="text-xs text-soft">이모지</label>
+            <input id="f-emoji" type="text" value="${esc(f.emoji)}" placeholder="📚" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none border" />
+            <div class="flex flex-wrap gap-1 mt-1.5">${EMOJI_PRESETS.map(e=>`<button data-emoji-pick="${e}" class="text-sm px-1.5 py-0.5 rounded surface-soft">${e}</button>`).join("")}</div>
           </div>
           <div style="width:96px">
-            <label class="text-xs" style="color:#8A8272">색상</label>
-            <input id="f-color" type="color" value="${f.color}" class="w-full h-9 rounded-md mt-1" style="border:1px solid #E4DDCC" />
+            <label class="text-xs text-soft">색상</label>
+            <input id="f-color" type="color" value="${f.color}" class="w-full h-9 rounded-md mt-1 border" />
             <div class="flex flex-wrap gap-1 mt-1.5">${SWATCHES.map(s=>`<button data-color-pick="${s}" style="width:14px;height:14px;border-radius:50%;background:${s}"></button>`).join("")}</div>
           </div>
         </div>
         <div>
-          <label class="text-xs" style="color:#8A8272">제목</label>
-          <input id="f-title" type="text" value="${esc(f.title)}" placeholder="예: 수학 3단원 익힘책 풀기" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" />
+          <label class="text-xs text-soft">제목</label>
+          <input id="f-title" type="text" value="${esc(f.title)}" placeholder="예: 수학 3단원 익힘책 풀기" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none border" />
         </div>
         <div class="flex gap-2">
           <div class="flex-1">
-            <label class="text-xs" style="color:#8A8272">시작일</label>
-            <input id="f-start" type="date" value="${f.startDate}" min="${MIN_DATE_STR}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" />
+            <label class="text-xs text-soft">시작일</label>
+            <input id="f-start" type="date" value="${f.startDate}" min="${MIN_DATE_STR}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none border" />
           </div>
           <div class="flex-1">
-            <label class="text-xs" style="color:#8A8272">종료일</label>
-            <input id="f-end" type="date" value="${f.endDate}" min="${f.startDate}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" />
+            <label class="text-xs text-soft">종료일</label>
+            <input id="f-end" type="date" value="${f.endDate}" min="${f.startDate}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none border" />
           </div>
         </div>
         <div>
-          <button id="f-time-toggle" class="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-bold" style="background:${f.hasTime?'#2E3153':'#F1ECE0'};color:${f.hasTime?'#fff':'#6B6252'}">🕐 시간 설정 ${f.hasTime?"끄기":"켜기"}</button>
+          <button id="f-time-toggle" class="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-bold" style="background:${f.hasTime?'#2E3153':'var(--bg-soft)'};color:${f.hasTime?'#fff':'var(--text-soft)'}">🕐 시간 설정 ${f.hasTime?"끄기":"켜기"}</button>
           <div id="time-fields" class="flex gap-2 mt-2" style="display:${f.hasTime?'flex':'none'}">
-            <div class="flex-1"><label class="text-xs" style="color:#8A8272">시작 시간</label>
-              <input id="f-stime" type="time" value="${f.startTime}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" /></div>
-            <div class="flex-1"><label class="text-xs" style="color:#8A8272">종료 시간(선택)</label>
-              <input id="f-etime" type="time" value="${f.endTime}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" /></div>
+            <div class="flex-1"><label class="text-xs text-soft">시작 시간</label>
+              <input id="f-stime" type="time" value="${f.startTime}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none border" /></div>
+            <div class="flex-1"><label class="text-xs text-soft">종료 시간(선택)</label>
+              <input id="f-etime" type="time" value="${f.endTime}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none border" /></div>
           </div>
         </div>
         <div>
-          <label class="text-xs" style="color:#8A8272">태그</label>
+          <label class="text-xs text-soft">태그</label>
           <div class="flex gap-1.5 mt-1">
-            <input id="f-tag-input" type="text" placeholder="예: 국어, 1모둠" class="flex-1 rounded-md px-3 py-2 text-sm outline-none" style="border:1px solid #E4DDCC;background:#fff" />
-            <button id="f-tag-add" class="px-3 rounded-md text-xs font-bold" style="background:#F1ECE0;color:#6B6252">추가</button>
+            <input id="f-tag-input" type="text" placeholder="예: 국어, 1모둠" class="flex-1 rounded-md px-3 py-2 text-sm outline-none border" />
+            <button id="f-tag-add" class="px-3 rounded-md text-xs font-bold surface-soft text-soft">추가</button>
           </div>
-          <div id="f-tag-list" class="flex flex-wrap gap-1 mt-1.5">${f.tags.map(t=>`<span class="tag-chip text-[11px] px-2 py-0.5 rounded flex items-center gap-1" style="background:#EFEAF7;color:#6B5FAE" data-tag="${esc(t)}">#${esc(t)} <button data-tag-remove="${esc(t)}">✕</button></span>`).join("")}</div>
+          <div id="f-tag-list" class="flex flex-wrap gap-1 mt-1.5">${f.tags.map(t=>`<span class="tag-chip text-[11px] px-2 py-0.5 rounded flex items-center gap-1 surface-soft text-soft" data-tag="${esc(t)}">#${esc(t)} <button data-tag-remove="${esc(t)}">✕</button></span>`).join("")}</div>
         </div>
         <div>
-          <label class="text-xs" style="color:#8A8272">메모 (선택)</label>
-          <textarea id="f-memo" rows="2" placeholder="추가로 안내할 내용이 있다면 적어주세요" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none resize-none" style="border:1px solid #E4DDCC;background:#fff">${esc(f.memo)}</textarea>
+          <label class="text-xs text-soft">메모 (선택)</label>
+          <textarea id="f-memo" rows="2" placeholder="추가로 안내할 내용이 있다면 적어주세요" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none resize-none border">${esc(f.memo)}</textarea>
         </div>
         <button id="f-submit" class="w-full mt-1 rounded-md py-2.5 text-sm text-white font-bold" style="background:#2E3153">${f.id?"수정 완료":"저장하기"}</button>
       </div>
@@ -421,8 +512,7 @@ function bindEventFormListeners(){
     btn.onclick = ()=>{
       FORM.category = btn.dataset.cat;
       FORM.color = btn.dataset.color;
-      document.querySelectorAll(".cat-btn").forEach(b=>{ b.style.background = b===btn?'#2E3153':'#F1ECE0'; b.style.color = b===btn?'#fff':'#6B6252'; });
-      document.getElementById("f-color").value = FORM.color;
+      renderEventFormPreserving();
     };
   });
   document.querySelectorAll("[data-emoji-pick]").forEach(btn=>{
@@ -441,8 +531,8 @@ function bindEventFormListeners(){
     const box = document.getElementById("time-fields");
     box.style.display = FORM.hasTime ? "flex" : "none";
     const btn = document.getElementById("f-time-toggle");
-    btn.style.background = FORM.hasTime ? "#2E3153" : "#F1ECE0";
-    btn.style.color = FORM.hasTime ? "#fff" : "#6B6252";
+    btn.style.background = FORM.hasTime ? "#2E3153" : "var(--bg-soft)";
+    btn.style.color = FORM.hasTime ? "#fff" : "var(--text-soft)";
     btn.textContent = `🕐 시간 설정 ${FORM.hasTime?"끄기":"켜기"}`;
   };
   document.getElementById("f-tag-add").onclick = addTagFromInput;
@@ -453,6 +543,12 @@ function bindEventFormListeners(){
   });
   document.getElementById("f-submit").onclick = submitEventForm;
 }
+function renderEventFormPreserving(){
+  FORM.title = document.getElementById("f-title").value;
+  FORM.emoji = document.getElementById("f-emoji").value;
+  FORM.memo = document.getElementById("f-memo").value;
+  renderEventForm();
+}
 function addTagFromInput(){
   const input = document.getElementById("f-tag-input");
   const t = input.value.trim();
@@ -461,7 +557,7 @@ function addTagFromInput(){
   refreshTagList();
 }
 function refreshTagList(){
-  document.getElementById("f-tag-list").innerHTML = FORM.tags.map(t=>`<span class="tag-chip text-[11px] px-2 py-0.5 rounded flex items-center gap-1" style="background:#EFEAF7;color:#6B5FAE" data-tag="${esc(t)}">#${esc(t)} <button data-tag-remove="${esc(t)}">✕</button></span>`).join("");
+  document.getElementById("f-tag-list").innerHTML = FORM.tags.map(t=>`<span class="tag-chip text-[11px] px-2 py-0.5 rounded flex items-center gap-1 surface-soft text-soft" data-tag="${esc(t)}">#${esc(t)} <button data-tag-remove="${esc(t)}">✕</button></span>`).join("");
 }
 function submitEventForm(){
   const title = document.getElementById("f-title").value.trim();
@@ -497,48 +593,48 @@ function renderDdayManage(){
   const sorted = [...S.ddays].sort((a,b)=> a.startDate<b.startDate?-1:1);
   const f = DFORM || { title:"", emoji:"", color:SWATCHES[0], isRange:false, startDate:S.selectedDate, endDate:S.selectedDate };
   document.getElementById("modal-root").innerHTML = `
-  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(30,27,20,0.4)">
-    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto" style="background:#FAF9F6;max-height:88vh">
+  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto surface border border-base" style="max-height:88vh">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-base font-bold" style="color:#2E3153">디데이 관리</h3>
-        <button data-action="close-modal">✕</button>
+        <h3 class="text-base font-bold text-base">디데이 관리</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
       </div>
       ${sorted.length>0 ? `<ul class="flex flex-col gap-1.5 mb-4">${sorted.map(item=>`
-        <li class="rounded-md px-3 py-2 flex items-center justify-between" style="background:#fff;border:1px solid #EEE7D8;border-left:4px solid ${item.color}">
-          <span class="text-sm truncate">${esc(item.emoji)} ${esc(item.title)} <span class="text-xs" style="color:#B5AD9C">· ${item.startDate===item.endDate?item.startDate:`${item.startDate} ~ ${item.endDate}`}</span></span>
+        <li class="rounded-md px-3 py-2 flex items-center justify-between surface-soft" style="border-left:4px solid ${item.color}">
+          <span class="text-sm truncate text-base">${esc(item.emoji)} ${esc(item.title)} <span class="text-xs text-faint">· ${item.startDate===item.endDate?item.startDate:`${item.startDate} ~ ${item.endDate}`}</span></span>
           <div class="flex gap-1 flex-shrink-0">
-            <button data-dday-edit="${item.id}" class="p-1.5 rounded-md" style="background:#F4F1E8">✎</button>
+            <button data-dday-edit="${item.id}" class="p-1.5 rounded-md surface">✎</button>
             ${S.confirmDeleteDdayId===item.id
               ? `<button data-dday-delete="${item.id}" class="p-1.5 rounded-md text-white text-[10px] px-2" style="background:#B23A32">확인</button>`
-              : `<button data-dday-confirm-delete="${item.id}" class="p-1.5 rounded-md" style="background:#F4F1E8">🗑</button>`}
+              : `<button data-dday-confirm-delete="${item.id}" class="p-1.5 rounded-md surface">🗑</button>`}
           </div>
         </li>`).join("")}</ul>` : ""}
-      <div class="flex flex-col gap-3 pt-3" style="border-top:1px solid #EEE7D8">
-        <p class="text-xs font-bold" style="color:#8A8272">${f.id?"디데이 수정":"새 디데이 추가"}</p>
+      <div class="flex flex-col gap-3 pt-3 border-t border-base">
+        <p class="text-xs font-bold text-soft">${f.id?"디데이 수정":"새 디데이 추가"}</p>
         <div class="flex gap-2">
-          <input id="d-emoji" type="text" value="${esc(f.emoji)}" placeholder="🏆" class="rounded-md px-3 py-2 text-sm outline-none" style="width:56px;border:1px solid #E4DDCC;background:#fff" />
-          <input id="d-title" type="text" value="${esc(f.title)}" placeholder="예: 체육대회" class="flex-1 rounded-md px-3 py-2 text-sm outline-none" style="border:1px solid #E4DDCC;background:#fff" />
+          <input id="d-emoji" type="text" value="${esc(f.emoji)}" placeholder="🏆" class="rounded-md px-3 py-2 text-sm outline-none border" style="width:56px" />
+          <input id="d-title" type="text" value="${esc(f.title)}" placeholder="예: 체육대회" class="flex-1 rounded-md px-3 py-2 text-sm outline-none border" />
         </div>
         <div>
-          <label class="text-xs" style="color:#8A8272">색상</label>
+          <label class="text-xs text-soft">색상</label>
           <div class="flex items-center gap-2 mt-1">
-            <input id="d-color" type="color" value="${f.color}" class="h-9" style="width:44px;border:1px solid #E4DDCC;border-radius:6px" />
+            <input id="d-color" type="color" value="${f.color}" class="h-9 border rounded-md" style="width:44px" />
             <div class="flex flex-wrap gap-1">${SWATCHES.map(s=>`<button data-dcolor-pick="${s}" style="width:14px;height:14px;border-radius:50%;background:${s}"></button>`).join("")}</div>
           </div>
         </div>
-        <div><button id="d-range-toggle" class="text-xs px-2.5 py-1.5 rounded-md font-bold" style="background:${f.isRange?'#2E3153':'#F1ECE0'};color:${f.isRange?'#fff':'#6B6252'}">기간 설정 ${f.isRange?"끄기":"켜기"}</button></div>
+        <div><button id="d-range-toggle" class="text-xs px-2.5 py-1.5 rounded-md font-bold" style="background:${f.isRange?'#2E3153':'var(--bg-soft)'};color:${f.isRange?'#fff':'var(--text-soft)'}">기간 설정 ${f.isRange?"끄기":"켜기"}</button></div>
         <div id="d-single" style="display:${f.isRange?'none':'block'}">
-          <label class="text-xs" style="color:#8A8272">날짜</label>
-          <input id="d-start-single" type="date" value="${f.startDate}" min="${MIN_DATE_STR}" max="${MAX_DATE_STR}" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" />
+          <label class="text-xs text-soft">날짜</label>
+          <input id="d-start-single" type="date" value="${f.startDate}" min="${MIN_DATE_STR}" max="${MAX_DATE_STR}" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none border" />
         </div>
         <div id="d-range" class="flex gap-2" style="display:${f.isRange?'flex':'none'}">
-          <div class="flex-1"><label class="text-xs" style="color:#8A8272">며칠부터 (D-day 기준일)</label>
-            <input id="d-start-range" type="date" value="${f.startDate}" min="${MIN_DATE_STR}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" /></div>
-          <div class="flex-1"><label class="text-xs" style="color:#8A8272">며칠까지</label>
-            <input id="d-end-range" type="date" value="${f.endDate}" min="${f.startDate}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none" style="border:1px solid #E4DDCC;background:#fff" /></div>
+          <div class="flex-1"><label class="text-xs text-soft">며칠부터 (D-day 기준일)</label>
+            <input id="d-start-range" type="date" value="${f.startDate}" min="${MIN_DATE_STR}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none border" /></div>
+          <div class="flex-1"><label class="text-xs text-soft">며칠까지</label>
+            <input id="d-end-range" type="date" value="${f.endDate}" min="${f.startDate}" max="${MAX_DATE_STR}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none border" /></div>
         </div>
         <div class="flex gap-2">
-          ${f.id ? `<button id="d-cancel" class="flex-1 rounded-md py-2.5 text-sm font-bold" style="background:#F1ECE0;color:#6B6252">취소</button>` : ""}
+          ${f.id ? `<button id="d-cancel" class="flex-1 rounded-md py-2.5 text-sm font-bold surface-soft text-soft">취소</button>` : ""}
           <button id="d-submit" class="flex-1 rounded-md py-2.5 text-sm text-white font-bold" style="background:#2E3153">${f.id?"수정 완료":"추가하기"}</button>
         </div>
       </div>
@@ -565,8 +661,8 @@ function bindDdayFormListeners(){
     isRange = !isRange;
     document.getElementById("d-single").style.display = isRange ? "none" : "block";
     document.getElementById("d-range").style.display = isRange ? "flex" : "none";
-    rangeToggle.style.background = isRange ? "#2E3153" : "#F1ECE0";
-    rangeToggle.style.color = isRange ? "#fff" : "#6B6252";
+    rangeToggle.style.background = isRange ? "#2E3153" : "var(--bg-soft)";
+    rangeToggle.style.color = isRange ? "#fff" : "var(--text-soft)";
     rangeToggle.textContent = `기간 설정 ${isRange?"끄기":"켜기"}`;
     if (isRange) document.getElementById("d-start-range").value = document.getElementById("d-start-single").value;
     else document.getElementById("d-start-single").value = document.getElementById("d-start-range").value;
@@ -595,9 +691,106 @@ function bindDdayFormListeners(){
   };
 }
 
+/* ---- 빨간날 관리 모달 ---- */
+let RFORM = null;
+function openRedDayManage(){ RFORM = null; renderRedDayManage(); }
+function renderRedDayManage(){
+  const sorted = [...S.redDays].sort((a,b)=> a.date<b.date?-1:1);
+  const f = RFORM || { label:"", date:S.selectedDate };
+  document.getElementById("modal-root").innerHTML = `
+  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto surface border border-base" style="max-height:88vh">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-base">빨간날 관리</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
+      </div>
+      <button id="add-holidays" class="w-full mb-3 rounded-md py-2 text-xs font-bold surface-soft text-soft border border-base">🇰🇷 대한민국 법정 공휴일 자동 추가</button>
+      <p class="text-[11px] text-faint mb-3">달력에는 법정 공휴일이 항상 기본으로 빨갛게 표시돼요. 위 버튼은 그 목록을 직접 수정하고 싶을 때, 편집 가능한 목록으로 복사해와요.</p>
+      ${sorted.length>0 ? `<ul class="flex flex-col gap-1.5 mb-4">${sorted.map(item=>`
+        <li class="rounded-md px-3 py-2 flex items-center justify-between surface-soft">
+          <span class="text-sm truncate text-base">${esc(item.label)} <span class="text-xs text-faint">· ${item.date}</span></span>
+          <div class="flex gap-1 flex-shrink-0">
+            <button data-red-edit="${item.id}" class="p-1.5 rounded-md surface">✎</button>
+            ${S.confirmDeleteRedId===item.id
+              ? `<button data-red-delete="${item.id}" class="p-1.5 rounded-md text-white text-[10px] px-2" style="background:#B23A32">확인</button>`
+              : `<button data-red-confirm-delete="${item.id}" class="p-1.5 rounded-md surface">🗑</button>`}
+          </div>
+        </li>`).join("")}</ul>` : `<p class="text-xs text-faint mb-4">직접 추가한 빨간날이 없어요.</p>`}
+      <div class="flex flex-col gap-3 pt-3 border-t border-base">
+        <p class="text-xs font-bold text-soft">${f.id?"빨간날 수정":"새 빨간날 추가"}</p>
+        <input id="r-label" type="text" value="${esc(f.label)}" placeholder="예: 학교 창립기념일" class="w-full rounded-md px-3 py-2 text-sm outline-none border" />
+        <input id="r-date" type="date" value="${f.date}" min="${MIN_DATE_STR}" max="${MAX_DATE_STR}" class="w-full rounded-md px-3 py-2 text-sm outline-none border" />
+        <div class="flex gap-2">
+          ${f.id ? `<button id="r-cancel" class="flex-1 rounded-md py-2.5 text-sm font-bold surface-soft text-soft">취소</button>` : ""}
+          <button id="r-submit" class="flex-1 rounded-md py-2.5 text-sm text-white font-bold" style="background:#2E3153">${f.id?"수정 완료":"추가하기"}</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  bindRedDayListeners();
+}
+function bindRedDayListeners(){
+  document.getElementById("add-holidays").onclick = ()=>{
+    const existing = new Set(S.redDays.map(r=>r.date));
+    const toAdd = BUILTIN_HOLIDAYS.filter(h=>!existing.has(h.date)).map(h=>({ id: uid(), label:h.label, date:h.date }));
+    S.redDays = [...S.redDays, ...toAdd];
+    saveToServer();
+    renderRedDayManage();
+    render();
+    showToast(toAdd.length>0 ? `${toAdd.length}개 추가했어요` : "이미 모두 추가되어 있어요");
+  };
+  document.querySelectorAll("[data-red-edit]").forEach(btn=>{
+    btn.onclick = ()=>{ const item = S.redDays.find(r=>r.id===btn.dataset.redEdit); RFORM = { ...item }; renderRedDayManage(); };
+  });
+  document.querySelectorAll("[data-red-confirm-delete]").forEach(btn=>{
+    btn.onclick = ()=>{ S.confirmDeleteRedId = btn.dataset.redConfirmDelete; renderRedDayManage(); };
+  });
+  document.querySelectorAll("[data-red-delete]").forEach(btn=>{
+    btn.onclick = ()=>{ S.redDays = S.redDays.filter(r=>r.id!==btn.dataset.redDelete); saveToServer(); S.confirmDeleteRedId=null; renderRedDayManage(); render(); showToast("삭제했어요"); };
+  });
+  const cancelBtn = document.getElementById("r-cancel");
+  if (cancelBtn) cancelBtn.onclick = ()=>{ RFORM=null; renderRedDayManage(); };
+  document.getElementById("r-submit").onclick = ()=>{
+    const label = document.getElementById("r-label").value.trim();
+    const date = document.getElementById("r-date").value;
+    if (!label || !date){ showToast("이름과 날짜를 입력해 주세요"); return; }
+    const payload = { label, date };
+    if (RFORM && RFORM.id) S.redDays = S.redDays.map(r=> r.id===RFORM.id ? { ...payload, id:RFORM.id } : r);
+    else S.redDays = [...S.redDays, { ...payload, id: uid() }];
+    saveToServer();
+    RFORM = null;
+    renderRedDayManage();
+    render();
+    showToast("저장했어요");
+  };
+}
+
+/* ---- 배너(고정 알림) 관리 모달 ---- */
+function openBannerManage(){
+  document.getElementById("modal-root").innerHTML = `
+  <div class="fixed inset-0 flex items-center justify-center px-6 z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-xl p-5 w-full max-w-md surface border border-base">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-bold text-base">📌 알림 배너 편집</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
+      </div>
+      <p class="text-[11px] text-faint mb-2">한 줄에 하나씩 입력하면 각 줄이 알림 목록의 항목이 돼요.</p>
+      <textarea id="banner-text" rows="6" placeholder="예: 시간표 변경 (화)사회 ↔ (목)과탐&#10;화학 수행 추석 전 주, 과탐실 수행 9월 1주" class="w-full rounded-md px-3 py-2 text-sm outline-none border resize-none">${esc(S.banner.lines.join("\n"))}</textarea>
+      <button id="banner-submit" class="w-full mt-3 rounded-md py-2 text-sm text-white font-bold" style="background:#2E3153">저장하기</button>
+    </div>
+  </div>`;
+  document.getElementById("banner-submit").onclick = ()=>{
+    const lines = document.getElementById("banner-text").value.split("\n").map(l=>l.trim()).filter(Boolean);
+    S.banner = { lines };
+    saveToServer();
+    closeModal();
+    render();
+    showToast("알림 배너를 저장했어요");
+  };
+}
+
 /* ---- 시작 ---- */
 loadFromServer();
-
 </script>
 </body>
 </html>
