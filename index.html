@@ -301,8 +301,8 @@ function render(){
   ];
   const weeksWithBars = buildBars(weeks, multiDaySource);
   html += `<div class="max-w-2xl mx-auto px-5">
-    <div class="overflow-x-auto pb-1">
-      <div style="min-width:760px">
+    <div class="w-full">
+      <div class="w-full">
         <div class="grid grid-cols-7 text-center text-xs mb-1">
           ${WEEKDAYS.map((w,i)=>`<div class="py-1 font-bold" style="color:${i===0?'#C4554D':i===6?'#3E76A0':'var(--text-faint)'}">${w}</div>`).join("")}
         </div>
@@ -319,9 +319,9 @@ function render(){
                 const holiday = redDayLabel(dateStr);
                 const numColor = holiday ? '#C4554D' : dow===0 ? '#C4554D' : dow===6 ? '#3E76A0' : 'var(--text)';
                 const dayEvents = S.events.filter(ev=>ev.startDate===ev.endDate && ev.startDate===dateStr);
-                return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="text-left align-top border-r border-b border-base ${ci===0?'border-l':''} ${wi===0?'border-t':''} p-1.5 flex flex-col gap-1 ${isSelected?'surface-soft':''}" style="opacity:${cell.inMonth&&inRange?1:0.3}">
-                  <div class="flex items-center gap-1 whitespace-nowrap overflow-hidden" style="height:20px">
-                    <span class="text-xs w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0" style="color:${isToday?'#fff':numColor};background:${isToday?'#2E3153':'transparent'};font-weight:${isToday?700:500}">${cell.d}</span>
+                return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="text-left align-top border-r border-b border-base ${ci===0?'border-l':''} ${wi===0?'border-t':''} p-2 flex flex-col gap-1.5 ${isSelected?'surface-soft':''}" style="opacity:${cell.inMonth&&inRange?1:0.3};min-height:64px">
+                  <div class="flex items-center gap-1 whitespace-nowrap overflow-hidden" style="height:22px">
+                    <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0" style="color:${isToday?'#fff':numColor};background:${isToday?'#2E3153':'transparent'};font-weight:${isToday?700:500}">${cell.d}</span>
                     ${holiday ? `<span class="text-[9px] font-bold truncate" style="color:#C4554D">${esc(holiday)}</span>` : ""}
                   </div>
                   ${barsHeight>0 ? `<div style="height:${barsHeight}px"></div>` : ""}
