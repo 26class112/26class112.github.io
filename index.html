@@ -294,7 +294,7 @@ function render(){
     </div>`;
   }
 
-  // Calendar (table style + 연속 바)
+  // Calendar (table style + 연속 바, 한 칸=하나의 버튼)
   const multiDaySource = [
     ...S.events.filter(ev=>ev.startDate!==ev.endDate).map(ev=>({ id:ev.id, title:ev.title, emoji:ev.emoji, color:ev.color, startDate:ev.startDate, endDate:ev.endDate })),
     ...S.ddays.filter(d=>d.startDate!==d.endDate).map(d=>({ id:"dday-"+d.id, title:d.title, emoji:d.emoji, color:d.color, startDate:d.startDate, endDate:d.endDate })),
@@ -306,44 +306,40 @@ function render(){
         <div class="grid grid-cols-7 text-center text-xs mb-1">
           ${WEEKDAYS.map((w,i)=>`<div class="py-1 font-bold" style="color:${i===0?'#C4554D':i===6?'#3E76A0':'var(--text-faint)'}">${w}</div>`).join("")}
         </div>
-        ${weeksWithBars.map((wk,wi)=>`
-        <div class="${wi===0?'border-t':''} border-l border-base">
-          <div class="grid grid-cols-7">
-            ${wk.week.map(cell=>{
-              const dateStr = fmt(cell.dateObj);
-              const dow = cell.dateObj.getDay();
-              const inRange = dateStr>=MIN_DATE_STR && dateStr<=MAX_DATE_STR;
-              const isSelected = dateStr===S.selectedDate;
-              const isToday = dateStr===todayStr;
-              const holiday = redDayLabel(dateStr);
-              const numColor = holiday ? '#C4554D' : dow===0 ? '#C4554D' : dow===6 ? '#3E76A0' : 'var(--text)';
-              return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="text-left border-r border-b border-base px-1.5 pt-1.5 flex items-center gap-1 ${isSelected?'surface-soft':''}" style="opacity:${cell.inMonth&&inRange?1:0.3}">
-                <span class="text-xs w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0" style="color:${isToday?'#fff':numColor};background:${isToday?'#2E3153':'transparent'};font-weight:${isToday?700:500}">${cell.d}</span>
-                ${holiday ? `<span class="text-[9px] font-bold truncate" style="color:#C4554D">${esc(holiday)}</span>` : ""}
-              </button>`;
-            }).join("")}
-          </div>
-          ${wk.laneCount>0 ? `<div class="relative px-0.5" style="height:${wk.laneCount*20+4}px">
-            ${wk.bars.map(b=>`<button data-action="select-date" data-date="${b.item.startDate}" class="absolute text-[10px] px-1.5 flex items-center rounded truncate text-white text-left" style="left:${(b.startCol/7)*100}%;width:calc(${(b.span/7)*100}% - 3px);top:${b.lane*20+2}px;height:17px;background:${b.item.color};font-weight:600">${esc(b.item.emoji)} ${esc(b.item.title)}</button>`).join("")}
-          </div>` : ""}
-          <div class="grid grid-cols-7">
-            ${wk.week.map(cell=>{
-              const dateStr = fmt(cell.dateObj);
-              const inRange = dateStr>=MIN_DATE_STR && dateStr<=MAX_DATE_STR;
-              const isSelected = dateStr===S.selectedDate;
-              const dayEvents = S.events.filter(ev=>ev.startDate===ev.endDate && ev.startDate===dateStr);
-              return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="text-left align-top border-r border-b border-base p-1.5 flex flex-col gap-1 ${isSelected?'surface-soft':''}" style="min-height:${dayEvents.length>0?'auto':'26px'};opacity:${cell.inMonth&&inRange?1:0.3}">
-                ${dayEvents.map(ev=>{
-                  const tone = NOTION_COLORS[getCategory(ev.category).tone] || NOTION_COLORS.gray;
-                  return `<div class="rounded px-1.5 py-1" style="background:${S.theme==='dark'?tone.dbg:tone.lbg}">
-                    <div class="text-[10px] font-bold truncate" style="color:${S.theme==='dark'?tone.dtext:tone.ltext}">${esc(ev.emoji)} ${esc(ev.title)}</div>
-                    ${ev.description?`<div class="text-[9px] mt-0.5 text-soft">${esc(ev.description)}</div>`:""}
-                  </div>`;
-                }).join("")}
-              </button>`;
-            }).join("")}
-          </div>
-        </div>`).join("")}
+        ${weeksWithBars.map((wk,wi)=>{
+          const barsHeight = wk.laneCount>0 ? wk.laneCount*20 : 0;
+          return `<div class="relative">
+            <div class="grid grid-cols-7">
+              ${wk.week.map((cell,ci)=>{
+                const dateStr = fmt(cell.dateObj);
+                const dow = cell.dateObj.getDay();
+                const inRange = dateStr>=MIN_DATE_STR && dateStr<=MAX_DATE_STR;
+                const isSelected = dateStr===S.selectedDate;
+                const isToday = dateStr===todayStr;
+                const holiday = redDayLabel(dateStr);
+                const numColor = holiday ? '#C4554D' : dow===0 ? '#C4554D' : dow===6 ? '#3E76A0' : 'var(--text)';
+                const dayEvents = S.events.filter(ev=>ev.startDate===ev.endDate && ev.startDate===dateStr);
+                return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="text-left align-top border-r border-b border-base ${ci===0?'border-l':''} ${wi===0?'border-t':''} p-1.5 flex flex-col gap-1 ${isSelected?'surface-soft':''}" style="opacity:${cell.inMonth&&inRange?1:0.3}">
+                  <div class="flex items-center gap-1 whitespace-nowrap overflow-hidden" style="height:20px">
+                    <span class="text-xs w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0" style="color:${isToday?'#fff':numColor};background:${isToday?'#2E3153':'transparent'};font-weight:${isToday?700:500}">${cell.d}</span>
+                    ${holiday ? `<span class="text-[9px] font-bold truncate" style="color:#C4554D">${esc(holiday)}</span>` : ""}
+                  </div>
+                  ${barsHeight>0 ? `<div style="height:${barsHeight}px"></div>` : ""}
+                  ${dayEvents.map(ev=>{
+                    const tone = NOTION_COLORS[getCategory(ev.category).tone] || NOTION_COLORS.gray;
+                    return `<div class="rounded px-1.5 py-1" style="background:${S.theme==='dark'?tone.dbg:tone.lbg}">
+                      <div class="text-[10px] font-bold truncate" style="color:${S.theme==='dark'?tone.dtext:tone.ltext}">${esc(ev.emoji)} ${esc(ev.title)}</div>
+                      ${ev.description?`<div class="text-[9px] mt-0.5 text-soft">${esc(ev.description)}</div>`:""}
+                    </div>`;
+                  }).join("")}
+                </button>`;
+              }).join("")}
+            </div>
+            ${barsHeight>0 ? `<div class="absolute" style="top:26px;left:0;right:0;height:${barsHeight}px;pointer-events:none">
+              ${wk.bars.map(b=>`<button data-action="select-date" data-date="${b.item.startDate}" class="absolute text-[10px] px-1.5 flex items-center rounded truncate text-white text-left" style="pointer-events:auto;left:${(b.startCol/7)*100}%;width:calc(${(b.span/7)*100}% - 3px);top:${b.lane*20}px;height:18px;background:${b.item.color};font-weight:600">${esc(b.item.emoji)} ${esc(b.item.title)}</button>`).join("")}
+            </div>` : ""}
+          </div>`;
+        }).join("")}
       </div>
     </div>
   </div>`;
