@@ -135,6 +135,7 @@ const S = {
   banner: { lines: [] },
   isAdmin: false,
   theme: localStorage.getItem("theme") === "dark" ? "dark" : "light",
+  calendarStyle: localStorage.getItem("calendarStyle") === "table" ? "table" : "compact",
   toast: "",
   loading: true,
 };
@@ -238,9 +239,15 @@ function render(){
 
   let html = `
   <div class="px-5 pt-7 pb-5 max-w-2xl mx-auto">
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between flex-wrap gap-y-2">
       <h1 class="text-xl font-bold text-base">2026 안산강서고 1-12</h1>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-3 flex-wrap justify-end">
+        <label class="flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-soft select-none" style="cursor:pointer">
+          TABLE VIEW
+          <button data-action="toggle-calendar-style" role="switch" aria-checked="${S.calendarStyle==='table'}" class="relative rounded-full transition-colors" style="width:34px;height:19px;background:${S.calendarStyle==='table'?'#2E3153':'#d8d5cf'}">
+            <span class="absolute rounded-full bg-white transition-transform" style="width:15px;height:15px;top:2px;left:2px;transform:translateX(${S.calendarStyle==='table'?'15px':'0'});box-shadow:0 1px 2px rgba(0,0,0,0.3)"></span>
+          </button>
+        </label>
         <label class="flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-soft select-none" style="cursor:pointer">
           DARK MODE
           <button data-action="toggle-theme" role="switch" aria-checked="${S.theme==='dark'}" class="relative rounded-full transition-colors" style="width:34px;height:19px;background:${S.theme==='dark'?'#2E3153':'#d8d5cf'}">
@@ -294,55 +301,93 @@ function render(){
     </div>`;
   }
 
-  // Calendar (table style + 연속 바, 한 칸=하나의 버튼)
-  const multiDaySource = [
-    ...S.events.filter(ev=>ev.startDate!==ev.endDate).map(ev=>({ id:ev.id, title:ev.title, emoji:ev.emoji, color:ev.color, startDate:ev.startDate, endDate:ev.endDate })),
-    ...S.ddays.filter(d=>d.startDate!==d.endDate).map(d=>({ id:"dday-"+d.id, title:d.title, emoji:d.emoji, color:d.color, startDate:d.startDate, endDate:d.endDate })),
-  ];
-  const weeksWithBars = buildBars(weeks, multiDaySource);
-  html += `<div class="max-w-2xl mx-auto px-5">
-    <div class="w-full">
-      <div class="w-full">
-        <div class="grid grid-cols-7 text-center text-xs mb-1">
-          ${WEEKDAYS.map((w,i)=>`<div class="py-1 font-bold" style="color:${i===0?'#C4554D':i===6?'#3E76A0':'var(--text-faint)'}">${w}</div>`).join("")}
+  // Calendar: compact(기본, 고정 칸) / table(노션 스타일) 두 가지 스타일 지원
+  if (S.calendarStyle === "table") {
+    const multiDayOnly = [
+      ...S.events.filter(ev=>ev.startDate!==ev.endDate).map(ev=>({ id:ev.id, title:ev.title, emoji:ev.emoji, color:ev.color, startDate:ev.startDate, endDate:ev.endDate })),
+      ...S.ddays.filter(d=>d.startDate!==d.endDate).map(d=>({ id:"dday-"+d.id, title:d.title, emoji:d.emoji, color:d.color, startDate:d.startDate, endDate:d.endDate })),
+    ];
+    const weeksWithBars = buildBars(weeks, multiDayOnly);
+    const NUM_ROW_H = 22;
+    html += `<div class="max-w-2xl mx-auto px-5">
+      <div class="overflow-x-auto pb-1">
+        <div style="min-width:760px">
+          <div class="grid grid-cols-7 text-center text-xs mb-1">
+            ${WEEKDAYS.map((w,i)=>`<div class="py-1 font-bold" style="color:${i===0?'#C4554D':i===6?'#3E76A0':'var(--text-faint)'}">${w}</div>`).join("")}
+          </div>
+          ${weeksWithBars.map((wk,wi)=>{
+            const barsAreaH = wk.laneCount>0 ? wk.laneCount*20+4 : 0;
+            return `<div class="relative ${wi===0?'border-t':''} border-l border-base">
+              <div class="grid grid-cols-7">
+                ${wk.week.map(cell=>{
+                  const dateStr = fmt(cell.dateObj);
+                  const dow = cell.dateObj.getDay();
+                  const inRange = dateStr>=MIN_DATE_STR && dateStr<=MAX_DATE_STR;
+                  const isSelected = dateStr===S.selectedDate;
+                  const isToday = dateStr===todayStr;
+                  const holiday = redDayLabel(dateStr);
+                  const numColor = holiday ? '#C4554D' : dow===0 ? '#C4554D' : dow===6 ? '#3E76A0' : 'var(--text)';
+                  const dayEvents = S.events.filter(ev=>ev.startDate===ev.endDate && ev.startDate===dateStr);
+                  return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="text-left align-top border-r border-b border-base p-1.5 flex flex-col gap-1 ${isSelected?'surface-soft':''}" style="opacity:${cell.inMonth&&inRange?1:0.3}">
+                    <div class="flex items-center gap-1" style="height:${NUM_ROW_H}px">
+                      <span class="text-xs w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0" style="color:${isToday?'#fff':numColor};background:${isToday?'#2E3153':'transparent'};font-weight:${isToday?700:500}">${cell.d}</span>
+                      ${holiday ? `<span class="text-[9px] font-bold truncate" style="color:#C4554D">${esc(holiday)}</span>` : ""}
+                    </div>
+                    ${barsAreaH>0 ? `<div style="height:${barsAreaH}px"></div>` : ""}
+                    ${dayEvents.map(ev=>{
+                      const tone = NOTION_COLORS[getCategory(ev.category).tone] || NOTION_COLORS.gray;
+                      return `<div class="rounded px-1.5 py-1" style="background:${S.theme==='dark'?tone.dbg:tone.lbg}">
+                        <div class="text-[10px] font-bold truncate" style="color:${S.theme==='dark'?tone.dtext:tone.ltext}">${esc(ev.emoji)} ${esc(ev.title)}</div>
+                        ${ev.description?`<div class="text-[9px] mt-0.5 text-soft">${esc(ev.description)}</div>`:""}
+                      </div>`;
+                    }).join("")}
+                  </button>`;
+                }).join("")}
+              </div>
+              ${barsAreaH>0 ? `<div class="absolute px-0.5" style="left:0;right:0;top:${NUM_ROW_H}px;height:${barsAreaH}px">
+                ${wk.bars.map(b=>`<button data-action="select-date" data-date="${b.item.startDate}" class="absolute text-[10px] px-1.5 flex items-center rounded truncate text-white text-left" style="left:${(b.startCol/7)*100}%;width:calc(${(b.span/7)*100}% - 3px);top:${b.lane*20+2}px;height:17px;background:${b.item.color};font-weight:600">${esc(b.item.emoji)} ${esc(b.item.title)}</button>`).join("")}
+              </div>` : ""}
+            </div>`;
+          }).join("")}
         </div>
-        ${weeksWithBars.map((wk,wi)=>{
-          const barsHeight = wk.laneCount>0 ? wk.laneCount*20 : 0;
-          return `<div class="relative">
+      </div>
+    </div>`;
+  } else {
+    const multiDaySource = [
+      ...S.events.map(ev=>({ id:ev.id, title:ev.title, emoji:ev.emoji, color:ev.color, startDate:ev.startDate, endDate:ev.endDate })),
+      ...S.ddays.map(d=>({ id:"dday-"+d.id, title:d.title, emoji:d.emoji, color:d.color, startDate:d.startDate, endDate:d.endDate })),
+    ];
+    const weeksWithBars = buildBars(weeks, multiDaySource);
+    html += `<div class="max-w-2xl mx-auto px-5">
+      <div class="grid grid-cols-7 text-center text-xs mb-1">
+        ${WEEKDAYS.map((w,i)=>`<div class="py-1 font-bold" style="color:${i===0?'#C4554D':i===6?'#3E76A0':'var(--text-faint)'}">${w}</div>`).join("")}
+      </div>
+      <div class="flex flex-col gap-0.5">
+        ${weeksWithBars.map(wk=>{
+          const weekHasSelected = wk.week.some(c=>fmt(c.dateObj)===S.selectedDate);
+          return `<div class="rounded-md ${weekHasSelected?'surface-soft':''}">
             <div class="grid grid-cols-7">
-              ${wk.week.map((cell,ci)=>{
+              ${wk.week.map(cell=>{
                 const dateStr = fmt(cell.dateObj);
                 const dow = cell.dateObj.getDay();
                 const inRange = dateStr>=MIN_DATE_STR && dateStr<=MAX_DATE_STR;
                 const isSelected = dateStr===S.selectedDate;
                 const isToday = dateStr===todayStr;
-                const holiday = redDayLabel(dateStr);
-                const numColor = holiday ? '#C4554D' : dow===0 ? '#C4554D' : dow===6 ? '#3E76A0' : 'var(--text)';
-                const dayEvents = S.events.filter(ev=>ev.startDate===ev.endDate && ev.startDate===dateStr);
-                return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="text-left align-top border-r border-b border-base ${ci===0?'border-l':''} ${wi===0?'border-t':''} p-2 flex flex-col gap-1.5 ${isSelected?'surface-soft':''}" style="opacity:${cell.inMonth&&inRange?1:0.3};min-height:64px">
-                  <div class="flex items-center gap-1 whitespace-nowrap overflow-hidden" style="height:22px">
-                    <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0" style="color:${isToday?'#fff':numColor};background:${isToday?'#2E3153':'transparent'};font-weight:${isToday?700:500}">${cell.d}</span>
-                    ${holiday ? `<span class="text-[9px] font-bold truncate" style="color:#C4554D">${esc(holiday)}</span>` : ""}
-                  </div>
-                  ${barsHeight>0 ? `<div style="height:${barsHeight}px"></div>` : ""}
-                  ${dayEvents.map(ev=>{
-                    const tone = NOTION_COLORS[getCategory(ev.category).tone] || NOTION_COLORS.gray;
-                    return `<div class="rounded px-1.5 py-1" style="background:${S.theme==='dark'?tone.dbg:tone.lbg}">
-                      <div class="text-[10px] font-bold truncate" style="color:${S.theme==='dark'?tone.dtext:tone.ltext}">${esc(ev.emoji)} ${esc(ev.title)}</div>
-                      ${ev.description?`<div class="text-[9px] mt-0.5 text-soft">${esc(ev.description)}</div>`:""}
-                    </div>`;
-                  }).join("")}
+                const holiday = isRedDay(dateStr);
+                const numColor = isSelected ? '#fff' : holiday ? '#C4554D' : dow===0 ? '#C4554D' : dow===6 ? '#3E76A0' : 'var(--text)';
+                return `<button data-action="select-date" data-date="${dateStr}" ${inRange?"":"disabled"} class="flex items-center justify-center py-1" style="opacity:${cell.inMonth&&inRange?1:0.28}">
+                  <span class="text-xs w-6 h-6 flex items-center justify-center rounded-full" style="color:${numColor};background:${isSelected?'#2E3153':'transparent'};font-weight:${isToday||isSelected?700:500};border:${isToday&&!isSelected?'1.5px solid #2E3153':'none'}">${cell.d}</span>
                 </button>`;
               }).join("")}
             </div>
-            ${barsHeight>0 ? `<div class="absolute" style="top:26px;left:0;right:0;height:${barsHeight}px;pointer-events:none">
-              ${wk.bars.map(b=>`<button data-action="select-date" data-date="${b.item.startDate}" class="absolute text-[10px] px-1.5 flex items-center rounded truncate text-white text-left" style="pointer-events:auto;left:${(b.startCol/7)*100}%;width:calc(${(b.span/7)*100}% - 3px);top:${b.lane*20}px;height:18px;background:${b.item.color};font-weight:600">${esc(b.item.emoji)} ${esc(b.item.title)}</button>`).join("")}
+            ${wk.laneCount>0 ? `<div class="relative px-0.5 pb-1" style="height:${wk.laneCount*20}px">
+              ${wk.bars.map(b=>`<button data-action="select-date" data-date="${b.item.startDate}" class="absolute text-[10px] px-1.5 flex items-center rounded truncate text-white text-left" style="left:${(b.startCol/7)*100}%;width:calc(${(b.span/7)*100}% - 3px);top:${b.lane*20}px;height:17px;background:${b.item.color};font-weight:600">${esc(b.item.emoji)} ${esc(b.item.title)}</button>`).join("")}
             </div>` : ""}
           </div>`;
         }).join("")}
       </div>
-    </div>
-  </div>`;
+    </div>`;
+  }
 
   // Day detail
   html += `<div class="max-w-2xl mx-auto px-5 mt-6">
@@ -404,6 +449,7 @@ document.addEventListener("click", (e)=>{
   else if (action==="next-month"){ if(!(S.viewYear===RANGE_MAX.y&&S.viewMonth===RANGE_MAX.m)){ if(S.viewMonth===11){S.viewMonth=0;S.viewYear++;} else S.viewMonth++; render(); } }
   else if (action==="select-date"){ S.selectedDate=date; S.confirmDeleteId=null; render(); }
   else if (action==="toggle-theme"){ S.theme = S.theme==="dark" ? "light" : "dark"; localStorage.setItem("theme", S.theme); render(); }
+  else if (action==="toggle-calendar-style"){ S.calendarStyle = S.calendarStyle==="table" ? "compact" : "table"; localStorage.setItem("calendarStyle", S.calendarStyle); render(); }
   else if (action==="open-pw"){ openPasswordModal(); }
   else if (action==="exit-admin"){ S.isAdmin=false; render(); showToast("학생 보기로 돌아왔어요"); }
   else if (action==="open-add-event"){ openEventForm(null); }
@@ -558,6 +604,12 @@ function renderEventFormPreserving(){
   FORM.emoji = document.getElementById("f-emoji").value;
   FORM.description = document.getElementById("f-desc").value;
   FORM.memo = document.getElementById("f-memo").value;
+  FORM.startDate = document.getElementById("f-start").value;
+  FORM.endDate = document.getElementById("f-end").value;
+  const st = document.getElementById("f-stime");
+  const et = document.getElementById("f-etime");
+  if (st) FORM.startTime = st.value;
+  if (et) FORM.endTime = et.value;
   renderEventForm();
 }
 function submitEventForm(){
