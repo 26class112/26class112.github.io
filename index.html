@@ -354,8 +354,8 @@ function render(){
     </div>`;
   } else {
     const multiDaySource = [
-      ...S.events.map(ev=>({ id:ev.id, title:ev.title, emoji:ev.emoji, color:ev.color, startDate:ev.startDate, endDate:ev.endDate })),
-      ...S.ddays.map(d=>({ id:"dday-"+d.id, title:d.title, emoji:d.emoji, color:d.color, startDate:d.startDate, endDate:d.endDate })),
+      ...S.events.map(ev=>({ id:ev.id, title:ev.title, emoji:ev.emoji, color:ev.color, startDate:ev.startDate, endDate:ev.endDate, description:ev.description })),
+      ...S.ddays.map(d=>({ id:"dday-"+d.id, title:d.title, emoji:d.emoji, color:d.color, startDate:d.startDate, endDate:d.endDate, description:"" })),
     ];
     const weeksWithBars = buildBars(weeks, multiDaySource);
     html += `<div class="max-w-2xl mx-auto px-5">
@@ -380,8 +380,11 @@ function render(){
                 </button>`;
               }).join("")}
             </div>
-            ${wk.laneCount>0 ? `<div class="relative px-0.5 pb-1" style="height:${wk.laneCount*20}px">
-              ${wk.bars.map(b=>`<button data-action="select-date" data-date="${b.item.startDate}" class="absolute text-[10px] px-1.5 flex items-center rounded truncate text-white text-left" style="left:${(b.startCol/7)*100}%;width:calc(${(b.span/7)*100}% - 3px);top:${b.lane*20}px;height:17px;background:${b.item.color};font-weight:600">${esc(b.item.emoji)} ${esc(b.item.title)}</button>`).join("")}
+            ${wk.laneCount>0 ? `<div class="relative px-0.5 pb-1" style="height:${wk.laneCount*30}px">
+              ${wk.bars.map(b=>`<button data-action="select-date" data-date="${b.item.startDate}" class="absolute px-1.5 py-1 rounded text-white text-left overflow-hidden" style="left:${(b.startCol/7)*100}%;width:calc(${(b.span/7)*100}% - 3px);top:${b.lane*30}px;height:27px;background:${b.item.color}">
+                <div class="text-[10px] font-bold truncate leading-tight">${esc(b.item.emoji)} ${esc(b.item.title)}</div>
+                ${b.item.description?`<div class="text-[9px] truncate leading-tight" style="opacity:0.85">${esc(b.item.description)}</div>`:""}
+              </button>`).join("")}
             </div>` : ""}
           </div>`;
         }).join("")}
