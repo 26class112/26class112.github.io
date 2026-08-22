@@ -61,14 +61,30 @@ const NOTION_COLORS = {
   green: { lbg:"#EDF3EC", ltext:"#4C7A5C", dbg:"#22362b", dtext:"#7cc99a" },
   blue:  { lbg:"#E7F3F8", ltext:"#3E76A0", dbg:"#1c3547", dtext:"#7bb4dd" },
 };
-const CATEGORIES = [
-  { key: "homework", label: "숙제", tone:"orange", color: "#D98A2B", checkable: true },
-  { key: "notice", label: "가정통신문", tone:"purple", color: "#6B5FAE", checkable: true },
-  { key: "eval", label: "수행평가", tone:"yellow", color: "#C15A42", checkable: false },
-  { key: "exam", label: "정기고사", tone:"red", color: "#A1332B", checkable: false },
-  { key: "event", label: "행사", tone:"green", color: "#2C8C7F", checkable: false },
-  { key: "alert", label: "알림", tone:"blue", color: "#3E7CB1", checkable: false },
+const DEFAULT_CATEGORIES = [
+  { key: "homework", label: "숙제", color: "#D98A2B" },
+  { key: "notice", label: "가정통신문", color: "#6B5FAE" },
+  { key: "eval", label: "수행평가", color: "#C15A42" },
+  { key: "exam", label: "정기고사", color: "#A1332B" },
+  { key: "event", label: "행사", color: "#2C8C7F" },
+  { key: "alert", label: "알림", color: "#3E7CB1" },
 ];
+function hexToRgb(hex){
+  hex = (hex||"#999999").replace("#","");
+  if (hex.length===3) hex = hex.split("").map(c=>c+c).join("");
+  const num = parseInt(hex,16) || 0x999999;
+  return { r:(num>>16)&255, g:(num>>8)&255, b:num&255 };
+}
+function mixRgb(a,b,t){ return { r:Math.round(a.r+(b.r-a.r)*t), g:Math.round(a.g+(b.g-a.g)*t), b:Math.round(a.b+(b.b-a.b)*t) }; }
+function rgbToHex(c){ return "#"+[c.r,c.g,c.b].map(x=>Math.max(0,Math.min(255,x)).toString(16).padStart(2,"0")).join(""); }
+// 카테고리 색상 하나만 골라도 배경/글자색이 자동으로 어울리게 만들어주는 함수
+function tagStyle(hex, theme){
+  const rgb = hexToRgb(hex);
+  if (theme==="dark") {
+    return { bg: rgbToHex(mixRgb(rgb,{r:0,g:0,b:0},0.62)), text: rgbToHex(mixRgb(rgb,{r:255,g:255,b:255},0.4)) };
+  }
+  return { bg: rgbToHex(mixRgb(rgb,{r:255,g:255,b:255},0.82)), text: rgbToHex(mixRgb(rgb,{r:0,g:0,b:0},0.22)) };
+}
 const SWATCHES = [
   "#D98A2B","#6B5FAE","#C15A42","#A1332B","#2C8C7F","#3E7CB1","#5B8A3C","#B45A9E",
   "#F7C6C7","#FBE4B0","#C9E4CA","#B5D8EB","#D6C7E8","#F9D5B0","#B8E0D2","#E8C7DE",
@@ -80,6 +96,54 @@ const RANGE_MAX = { y: 2027, m: 2 };
 const MIN_DATE_STR = "2026-08-01";
 const MAX_DATE_STR = "2027-03-31";
 const WEEKDAYS = ["일","월","화","수","목","금","토"];
+
+/* ---- 2026년 1학년 2학기 12반 시간표 ---- */
+const TIMETABLE_DAYS = ["월","화","수","목","금"];
+const TIMETABLE = [
+  // [월, 화, 수, 목, 금] - 각 칸은 {subject, teacher} 또는 null(공강), span은 금요일 5-6교시 창체처럼 합쳐진 경우에만 사용
+  [ {s:"물리",t:"김세원T"}, {s:"국어",t:"박주은T"}, {s:"영어",t:"최동원T"}, {s:"한국사",t:"홍승진T"}, {s:"사회",t:"권순효T"} ],
+  [ {s:"사회",t:"권순효T"}, {s:"화학",t:"김지운T"}, {s:"국어",t:"박주은T"}, {s:"일본문화",t:"김경택T"}, {s:"영어",t:"최동원T"} ],
+  [ {s:"수학",t:"이후성T"}, {s:"체육",t:"양철호T"}, {s:"사회",t:"권순효T"}, {s:"수학",t:"이후성T"}, {s:"일본문화",t:"김경택T"} ],
+  [ {s:"한국사",t:"홍승진T"}, {s:"일본문화",t:"김경택T"}, {s:"수학",t:"이후성T"}, {s:"과탐실",t:"김지운T"}, {s:"수학",t:"이후성T"} ],
+  [ {s:"영어",t:"이태주T"}, {s:"사회",t:"권순효T"}, {s:"지구과학",t:"안지호T"}, {s:"국어",t:"박주은T"}, {s:"창체",t:"", span:2} ],
+  [ {s:"진로",t:"진선혜T"}, {s:"영어",t:"최동원T"}, {s:"한국사",t:"홍승진T"}, {s:"체육",t:"양철호T"}, null ],
+  [ {s:"국어",t:"박주은T"}, null, null, {s:"생명과학",t:"김현경T"}, null ],
+];
+
+/* ---- 급식(NEIS) 실시간 연동 ---- */
+const SCHOOL_NAME = "안산강서고등학교";
+let SCHOOL_CODES = null; // { atpt, sd } - 최초 조회 후 캐시
+async function ensureSchoolCodes(){
+  if (SCHOOL_CODES) return SCHOOL_CODES;
+  const url = "https://open.neis.go.kr/hub/schoolInfo?Type=json&SCHUL_NM=" + encodeURIComponent(SCHOOL_NAME);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("school lookup failed");
+  const data = await res.json();
+  const row = data.schoolInfo && data.schoolInfo[1] && data.schoolInfo[1].row && data.schoolInfo[1].row[0];
+  if (!row) throw new Error("school not found");
+  SCHOOL_CODES = { atpt: row.ATPT_OFCDC_SC_CODE, sd: row.SD_SCHUL_CODE };
+  return SCHOOL_CODES;
+}
+async function loadMeal(dateStr){
+  S.mealLoading = true; S.mealError = false; S.mealRows = null; render();
+  try {
+    const codes = await ensureSchoolCodes();
+    const ymd = dateStr.replace(/-/g,"");
+    const url = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&ATPT_OFCDC_SC_CODE=${codes.atpt}&SD_SCHUL_CODE=${codes.sd}&MLSV_YMD=${ymd}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("meal fetch failed");
+    const data = await res.json();
+    const rows = data.mealServiceDietInfo && data.mealServiceDietInfo[1] && data.mealServiceDietInfo[1].row;
+    S.mealRows = rows ? rows.map(r=>({ name: r.MMEAL_SC_NM, dish: (r.DDISH_NM||"").replace(/<br\/>/g,"\n") })) : [];
+    S.mealError = false;
+  } catch (e) {
+    S.mealError = true;
+    S.mealRows = null;
+  }
+  S.mealLoading = false;
+  render();
+}
+
 
 /* ---- 2026.8 ~ 2027.3 대한민국 법정 공휴일(기본 제공) ---- */
 const BUILTIN_HOLIDAYS = [
@@ -104,7 +168,7 @@ function pad(n){ return String(n).padStart(2,"0"); }
 function fmt(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
 function parseDate(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
 function diffDays(a,b){ return Math.round((b-a)/86400000); }
-function getCategory(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[0]; }
+function getCategory(key){ return S.categories.find(c=>c.key===key) || { key, label: key||"기타", color:"#9b9a97" }; }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function esc(s){ return (s||"").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
 function clampToRange(y,m){
@@ -132,10 +196,17 @@ const S = {
   events: [],
   ddays: [],
   redDays: [],
+  categories: DEFAULT_CATEGORIES.map(c=>({...c})),
   banner: { lines: [] },
   isAdmin: false,
   theme: localStorage.getItem("theme") === "dark" ? "dark" : "light",
   calendarStyle: localStorage.getItem("calendarStyle") === "table" ? "table" : "compact",
+  page: "calendar",
+  menuOpen: false,
+  mealDate: todayStr,
+  mealLoading: false,
+  mealError: false,
+  mealRows: null,
   toast: "",
   loading: true,
 };
@@ -150,6 +221,7 @@ async function loadFromServer(){
     S.events = Array.isArray(data.events) ? data.events : [];
     S.ddays = Array.isArray(data.ddays) ? data.ddays : [];
     S.redDays = Array.isArray(data.redDays) ? data.redDays : [];
+    S.categories = Array.isArray(data.categories) && data.categories.length>0 ? data.categories : DEFAULT_CATEGORIES.map(c=>({...c}));
     S.banner = data.banner && Array.isArray(data.banner.lines) ? data.banner : { lines: [] };
   } catch (e) {}
   S.loading = false;
@@ -160,7 +232,7 @@ async function saveToServer(){
     await fetch(DATA_URL, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
-      body: JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner }),
+      body: JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner, categories: S.categories }),
     });
   } catch (e) {}
 }
@@ -238,7 +310,7 @@ function render(){
   const selectedHoliday = redDayLabel(S.selectedDate);
 
   let html = `
-  <div class="px-5 pt-7 pb-5 max-w-2xl mx-auto">
+  <div class="px-5 pt-7 pb-5 max-w-2xl mx-auto relative">
     <div class="flex items-center justify-between flex-wrap gap-y-2">
       <h1 class="text-xl font-bold text-base">2026 안산강서고 1-12</h1>
       <div class="flex items-center gap-3 flex-wrap justify-end">
@@ -257,9 +329,20 @@ function render(){
         ${S.isAdmin
           ? `<button data-action="exit-admin" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full text-white" style="background:#6B5FAE">🔓 관리자</button>`
           : `<button data-action="open-pw" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full surface-soft text-soft border border-base">🔒 관리자</button>`}
+        <button data-action="toggle-menu" class="flex items-center justify-center rounded-full surface-soft border border-base" style="width:32px;height:32px;font-size:16px">☰</button>
       </div>
     </div>
+    ${S.menuOpen ? `
+    <div class="absolute right-5 top-full mt-1 rounded-lg surface border border-base z-40" style="box-shadow:var(--shadow);min-width:150px">
+      <button data-action="go-page" data-page="calendar" class="w-full text-left px-4 py-2.5 text-sm ${S.page==='calendar'?'font-bold':''} text-base" style="background:${S.page==='calendar'?'var(--bg-soft)':'transparent'}">📅 캘린더</button>
+      <button data-action="go-page" data-page="timetable" class="w-full text-left px-4 py-2.5 text-sm ${S.page==='timetable'?'font-bold':''} text-base" style="background:${S.page==='timetable'?'var(--bg-soft)':'transparent'}">🗓 시간표</button>
+      <button data-action="go-page" data-page="meal" class="w-full text-left px-4 py-2.5 text-sm ${S.page==='meal'?'font-bold':''} text-base" style="background:${S.page==='meal'?'var(--bg-soft)':'transparent'}">🍚 급식</button>
+      ${S.isAdmin ? `<div class="px-4 py-2 text-[10px] text-faint border-t border-base">🔓 관리자 모드</div>` : ""}
+    </div>` : ""}
   </div>`;
+
+  if (S.page === "timetable") { html += renderTimetablePage(); document.getElementById("app").innerHTML = html; return; }
+  if (S.page === "meal") { html += renderMealPage(); document.getElementById("app").innerHTML = html; return; }
 
   // 고정 알림 배너
   if (S.banner.lines.length>0 || S.isAdmin){
@@ -335,9 +418,9 @@ function render(){
                     </div>
                     ${barsAreaH>0 ? `<div style="height:${barsAreaH}px"></div>` : ""}
                     ${dayEvents.map(ev=>{
-                      const tone = NOTION_COLORS[getCategory(ev.category).tone] || NOTION_COLORS.gray;
-                      return `<div class="rounded px-1.5 py-1" style="background:${S.theme==='dark'?tone.dbg:tone.lbg}">
-                        <div class="text-[10px] font-bold truncate" style="color:${S.theme==='dark'?tone.dtext:tone.ltext}">${esc(ev.emoji)} ${esc(ev.title)}</div>
+                      const tone = tagStyle(getCategory(ev.category).color, S.theme);
+                      return `<div class="rounded px-1.5 py-1" style="background:${tone.bg}">
+                        <div class="text-[10px] font-bold truncate" style="color:${tone.text}">${esc(ev.emoji)} ${esc(ev.title)}</div>
                         ${ev.description?`<div class="text-[9px] mt-0.5 text-soft">${esc(ev.description)}</div>`:""}
                       </div>`;
                     }).join("")}
@@ -406,12 +489,12 @@ function render(){
       ? `<p class="text-sm py-6 text-center rounded-lg surface-soft text-faint">등록된 일정이 없어요.</p>`
       : `<ul class="flex flex-col gap-2">${selectedEvents.map(ev=>{
           const cat = getCategory(ev.category);
-          const tone = NOTION_COLORS[cat.tone] || NOTION_COLORS.gray;
+          const tone = tagStyle(cat.color, S.theme);
           const isRange = ev.startDate!==ev.endDate;
           return `<li class="rounded-lg p-3 flex items-start gap-2 surface border border-base" style="border-left:4px solid ${ev.color};box-shadow:var(--shadow)">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" style="background:${S.theme==='dark'?tone.dbg:tone.lbg};color:${S.theme==='dark'?tone.dtext:tone.ltext}">${cat.label}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" style="background:${tone.bg};color:${tone.text}">${cat.label}</span>
               </div>
               <div class="text-sm font-bold mt-1 text-base">${esc(ev.emoji)} ${esc(ev.title)}</div>
               <div class="text-[11px] mt-0.5 flex items-center gap-2 flex-wrap text-faint">
@@ -443,7 +526,11 @@ function render(){
 /* ---- 액션 처리 ---- */
 document.addEventListener("click", (e)=>{
   const el = e.target.closest("[data-action]");
-  if (!el) return;
+  if (!el) {
+    if (S.menuOpen) { S.menuOpen = false; render(); }
+    return;
+  }
+  if (S.menuOpen && el.dataset.action!=="toggle-menu" && el.dataset.action!=="go-page") { S.menuOpen = false; }
   const action = el.dataset.action;
   const id = el.dataset.id;
   const date = el.dataset.date;
@@ -453,6 +540,14 @@ document.addEventListener("click", (e)=>{
   else if (action==="select-date"){ S.selectedDate=date; S.confirmDeleteId=null; render(); }
   else if (action==="toggle-theme"){ S.theme = S.theme==="dark" ? "light" : "dark"; localStorage.setItem("theme", S.theme); render(); }
   else if (action==="toggle-calendar-style"){ S.calendarStyle = S.calendarStyle==="table" ? "compact" : "table"; localStorage.setItem("calendarStyle", S.calendarStyle); render(); }
+  else if (action==="toggle-menu"){ S.menuOpen = !S.menuOpen; render(); }
+  else if (action==="go-page"){
+    S.page = el.dataset.page; S.menuOpen = false; render();
+    if (S.page==="meal" && S.mealRows===null && !S.mealLoading) loadMeal(S.mealDate);
+  }
+  else if (action==="meal-prev-day"){ const d=parseDate(S.mealDate); d.setDate(d.getDate()-1); S.mealDate=fmt(d); loadMeal(S.mealDate); }
+  else if (action==="meal-next-day"){ const d=parseDate(S.mealDate); d.setDate(d.getDate()+1); S.mealDate=fmt(d); loadMeal(S.mealDate); }
+  else if (action==="meal-today"){ S.mealDate=todayStr; loadMeal(S.mealDate); }
   else if (action==="open-pw"){ openPasswordModal(); }
   else if (action==="exit-admin"){ S.isAdmin=false; render(); showToast("학생 보기로 돌아왔어요"); }
   else if (action==="open-add-event"){ openEventForm(null); }
@@ -461,6 +556,7 @@ document.addEventListener("click", (e)=>{
   else if (action==="delete-event"){ S.events=S.events.filter(ev=>ev.id!==id); saveToServer(); S.confirmDeleteId=null; render(); showToast("일정을 삭제했어요"); }
   else if (action==="open-dday-manage"){ openDdayManage(); }
   else if (action==="open-redday-manage"){ openRedDayManage(); }
+  else if (action==="open-category-manage"){ openCategoryManage(); }
   else if (action==="open-banner-manage"){ openBannerManage(); }
   else if (action==="close-modal"){ closeModal(); }
 });
@@ -497,7 +593,7 @@ function closeModal(){ document.getElementById("modal-root").innerHTML=""; }
 let FORM = null;
 function openEventForm(ev){
   FORM = ev ? { ...ev } : {
-    id: null, title:"", emoji:"", category:"homework", color:CATEGORIES[0].color,
+    id: null, title:"", emoji:"", category:(S.categories[0]?S.categories[0].key:"homework"), color:(S.categories[0]?S.categories[0].color:"#D98A2B"),
     startDate:S.selectedDate, endDate:S.selectedDate, hasTime:false, startTime:"09:00", endTime:"10:00",
     description:"", memo:""
   };
@@ -516,12 +612,13 @@ function renderEventForm(){
         <div>
           <label class="text-xs text-soft">구분</label>
           <div id="cat-buttons" class="flex flex-wrap gap-1.5 mt-1">
-            ${CATEGORIES.map(c=>{
-              const tone = NOTION_COLORS[c.tone];
+            ${S.categories.map(c=>{
+              const tone = tagStyle(c.color, S.theme);
               const active = f.category===c.key;
-              return `<button data-cat="${c.key}" data-color="${c.color}" class="cat-btn text-xs px-2.5 py-1.5 rounded-full font-bold" style="background:${active?'#2E3153':(S.theme==='dark'?tone.dbg:tone.lbg)};color:${active?'#fff':(S.theme==='dark'?tone.dtext:tone.ltext)}">${c.label}</button>`;
+              return `<button data-cat="${c.key}" data-color="${c.color}" class="cat-btn text-xs px-2.5 py-1.5 rounded-full font-bold" style="background:${active?'#2E3153':tone.bg};color:${active?'#fff':tone.text}">${esc(c.label)}</button>`;
             }).join("")}
           </div>
+          ${S.isAdmin ? `<button data-action="open-category-manage" class="text-[11px] underline text-soft mt-1">구분 관리</button>` : ""}
         </div>
         <div class="flex gap-2">
           <div class="flex-1">
@@ -821,6 +918,78 @@ function bindRedDayListeners(){
   };
 }
 
+/* ---- 구분(카테고리) 관리 모달 ---- */
+let CFORM = null;
+function openCategoryManage(){ CFORM = null; renderCategoryManage(); }
+function renderCategoryManage(){
+  const f = CFORM || { label:"", color:SWATCHES[0] };
+  document.getElementById("modal-root").innerHTML = `
+  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto surface border border-base" style="max-height:88vh">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-base">구분 관리</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
+      </div>
+      ${S.categories.length>0 ? `<ul class="flex flex-col gap-1.5 mb-4">${S.categories.map(c=>{
+        const tone = tagStyle(c.color, S.theme);
+        return `<li class="rounded-md px-3 py-2 flex items-center justify-between surface-soft">
+          <span class="text-xs px-2 py-0.5 rounded-full font-bold" style="background:${tone.bg};color:${tone.text}">${esc(c.label)}</span>
+          <div class="flex gap-1 flex-shrink-0">
+            <button data-cat-edit="${c.key}" class="p-1.5 rounded-md surface">✎</button>
+            ${S.confirmDeleteCatId===c.key
+              ? `<button data-cat-delete="${c.key}" class="p-1.5 rounded-md text-white text-[10px] px-2" style="background:#B23A32">확인</button>`
+              : `<button data-cat-confirm-delete="${c.key}" class="p-1.5 rounded-md surface">🗑</button>`}
+          </div>
+        </li>`;
+      }).join("")}</ul>` : `<p class="text-xs text-faint mb-4">등록된 구분이 없어요.</p>`}
+      <div class="flex flex-col gap-3 pt-3 border-t border-base">
+        <p class="text-xs font-bold text-soft">${f.key?"구분 수정":"새 구분 추가"}</p>
+        <input id="c-label" type="text" value="${esc(f.label)}" placeholder="예: 모의고사" class="w-full rounded-md px-3 py-2 text-sm outline-none border" />
+        <div>
+          <label class="text-xs text-soft">색상</label>
+          <div class="flex items-center gap-2 mt-1">
+            <input id="c-color" type="color" value="${f.color}" class="h-9 border rounded-md" style="width:44px" />
+            <div class="flex flex-wrap gap-1">${SWATCHES.map(s=>`<button data-ccolor-pick="${s}" style="width:14px;height:14px;border-radius:50%;background:${s}"></button>`).join("")}</div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          ${f.key ? `<button id="c-cancel" class="flex-1 rounded-md py-2.5 text-sm font-bold surface-soft text-soft">취소</button>` : ""}
+          <button id="c-submit" class="flex-1 rounded-md py-2.5 text-sm text-white font-bold" style="background:#2E3153">${f.key?"수정 완료":"추가하기"}</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  bindCategoryListeners();
+}
+function bindCategoryListeners(){
+  document.querySelectorAll("[data-cat-edit]").forEach(btn=>{
+    btn.onclick = ()=>{ const item = S.categories.find(c=>c.key===btn.dataset.catEdit); CFORM = { ...item }; renderCategoryManage(); };
+  });
+  document.querySelectorAll("[data-cat-confirm-delete]").forEach(btn=>{
+    btn.onclick = ()=>{ S.confirmDeleteCatId = btn.dataset.catConfirmDelete; renderCategoryManage(); };
+  });
+  document.querySelectorAll("[data-cat-delete]").forEach(btn=>{
+    btn.onclick = ()=>{ S.categories = S.categories.filter(c=>c.key!==btn.dataset.catDelete); saveToServer(); S.confirmDeleteCatId=null; renderCategoryManage(); render(); showToast("삭제했어요"); };
+  });
+  document.querySelectorAll("[data-ccolor-pick]").forEach(btn=>{
+    btn.onclick = ()=>{ document.getElementById("c-color").value = btn.dataset.ccolorPick; };
+  });
+  const cancelBtn = document.getElementById("c-cancel");
+  if (cancelBtn) cancelBtn.onclick = ()=>{ CFORM=null; renderCategoryManage(); };
+  document.getElementById("c-submit").onclick = ()=>{
+    const label = document.getElementById("c-label").value.trim();
+    const color = document.getElementById("c-color").value;
+    if (!label){ showToast("이름을 입력해 주세요"); return; }
+    if (CFORM && CFORM.key) S.categories = S.categories.map(c=> c.key===CFORM.key ? { ...c, label, color } : c);
+    else S.categories = [...S.categories, { key: uid(), label, color }];
+    saveToServer();
+    CFORM = null;
+    renderCategoryManage();
+    render();
+    showToast("저장했어요");
+  };
+}
+
 /* ---- 배너(고정 알림) 관리 모달 ---- */
 function openBannerManage(){
   document.getElementById("modal-root").innerHTML = `
@@ -843,6 +1012,90 @@ function openBannerManage(){
     render();
     showToast("알림 배너를 저장했어요");
   };
+}
+
+/* ---- 시간표 페이지 ---- */
+function renderTimetablePage(){
+  const PERIODS = 7;
+  let rows = "";
+  for (let p=0; p<PERIODS; p++){
+    rows += `<tr>`;
+    rows += `<td class="text-xs font-bold text-center py-2 px-1 surface-soft border border-base">${p+1}교시</td>`;
+    for (let d=0; d<5; d++){
+      const cell = TIMETABLE[p][d];
+      if (cell === undefined) continue; // span으로 인해 이미 그려진 칸(금요일 6교시)
+      if (cell === null){
+        rows += `<td class="border border-base"></td>`;
+      } else {
+        const rowspan = cell.span || 1;
+        rows += `<td class="text-center py-2 px-1 border border-base" ${rowspan>1?`rowspan="${rowspan}"`:""}>
+          <div class="text-sm font-bold text-base">${esc(cell.s)}</div>
+          ${cell.t?`<div class="text-[11px] text-faint mt-0.5">${esc(cell.t)}</div>`:""}
+        </td>`;
+      }
+    }
+    rows += `</tr>`;
+  }
+  return `<div class="max-w-2xl mx-auto px-5">
+    <h2 class="text-base font-bold mb-3 text-base">2026년 1학년 2학기 · 12반 시간표</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full border-collapse" style="min-width:480px">
+        <thead>
+          <tr>
+            <th class="text-xs py-2 px-1 surface-soft border border-base"></th>
+            ${TIMETABLE_DAYS.map(d=>`<th class="text-xs font-bold py-2 px-1 surface-soft border border-base">${d}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+// TIMETABLE에서 금요일 5교시 span=2 칸 바로 다음(6교시, 금요일)은 렌더링에서 건너뛰도록 표시
+(function markSpannedCells(){
+  for (let p=0;p<TIMETABLE.length;p++){
+    for (let d=0; d<5; d++){
+      const cell = TIMETABLE[p][d];
+      if (cell && cell.span > 1){
+        for (let k=1; k<cell.span; k++){
+          if (TIMETABLE[p+k]) TIMETABLE[p+k][d] = undefined;
+        }
+      }
+    }
+  }
+})();
+
+/* ---- 급식 페이지 ---- */
+function renderMealPage(){
+  const d = parseDate(S.mealDate);
+  const label = `${d.getMonth()+1}월 ${d.getDate()}일 (${WEEKDAYS[d.getDay()]})`;
+  let body;
+  if (S.mealLoading){
+    body = `<p class="text-sm text-faint text-center py-10">불러오는 중...</p>`;
+  } else if (S.mealError){
+    body = `<div class="text-sm text-center py-10 text-faint">
+      급식 정보를 불러오지 못했어요.<br/>
+      <a href="https://asgs-h.goeas.kr/asgs-h/main.do" target="_blank" class="underline" style="color:#3E76A0">학교 홈페이지에서 확인하기 →</a>
+    </div>`;
+  } else if (!S.mealRows || S.mealRows.length===0){
+    body = `<p class="text-sm text-faint text-center py-10">이 날짜엔 등록된 급식 정보가 없어요.</p>`;
+  } else {
+    body = S.mealRows.map(r=>`
+      <div class="rounded-lg p-3 mb-2 surface border border-base" style="box-shadow:var(--shadow)">
+        <div class="text-xs font-bold px-2 py-0.5 rounded-full inline-block mb-1.5" style="background:var(--bg-soft);color:var(--text-soft)">${esc(r.name)}</div>
+        <div class="text-sm text-base" style="white-space:pre-line">${esc(r.dish)}</div>
+      </div>`).join("");
+  }
+  return `<div class="max-w-2xl mx-auto px-5">
+    <h2 class="text-base font-bold mb-3 text-base">🍚 급식</h2>
+    <div class="flex items-center justify-center gap-4 mb-4">
+      <button data-action="meal-prev-day" class="p-1.5 rounded-full surface-soft border border-base">‹</button>
+      <button data-action="meal-today" class="text-sm font-bold text-base">${label}</button>
+      <button data-action="meal-next-day" class="p-1.5 rounded-full surface-soft border border-base">›</button>
+    </div>
+    ${body}
+    <p class="text-[11px] text-faint text-center mt-3">NEIS 교육정보 개방 포털 제공</p>
+  </div>`;
 }
 
 /* ---- 시작 ---- */
