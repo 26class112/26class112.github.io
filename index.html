@@ -248,10 +248,11 @@ function showToast(msg){
 }
 
 /* ---- 계산 로직 ---- */
-function ddayCountdown(dateStr){
-  const diff = diffDays(parseDate(todayStr), parseDate(dateStr));
-  if (diff>0) return { text:`D-${diff}`, tone:"#2E3153" };
-  if (diff===0) return { text:"D-DAY", tone:"#2C8C7F" };
+function ddayCountdown(startDate, endDate){
+  endDate = endDate || startDate;
+  const t = parseDate(todayStr), s = parseDate(startDate), e = parseDate(endDate);
+  if (t>=s && t<=e) return { text:"진행중", tone:"#2C8C7F" };
+  if (t<s) return { text:`D-${diffDays(t,s)}`, tone:"#2E3153" };
   return { text:"지남", tone:"#9b9a97" };
 }
 function buildWeeks(viewYear, viewMonth){
@@ -305,7 +306,8 @@ function render(){
   const weeks = buildWeeks(S.viewYear, S.viewMonth);
   const atMin = S.viewYear===RANGE_MIN.y && S.viewMonth===RANGE_MIN.m;
   const atMax = S.viewYear===RANGE_MAX.y && S.viewMonth===RANGE_MAX.m;
-  const ddaySorted = [...S.ddays].sort((a,b)=> a.startDate<b.startDate?-1:1);
+  const eventDdays = S.events.filter(ev=>ev.showAsDday).map(ev=>({ id:"evd-"+ev.id, title:ev.title, emoji:ev.emoji, color:ev.color, startDate:ev.startDate, endDate:ev.endDate }));
+  const ddaySorted = [...S.ddays, ...eventDdays].sort((a,b)=> a.startDate<b.startDate?-1:1);
   const selectedEvents = eventsOnDate(S.selectedDate);
   const selectedHoliday = redDayLabel(S.selectedDate);
 
@@ -375,7 +377,7 @@ function render(){
         ${S.isAdmin ? `<button data-action="open-dday-manage" class="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full text-white" style="background:#2E3153">＋ 디데이 관리</button>` : ""}
       </div>
       ${ddaySorted.length>0 ? `<div class="flex gap-2 overflow-x-auto pb-1">${ddaySorted.map(item=>{
-        const dd = ddayCountdown(item.startDate);
+        const dd = ddayCountdown(item.startDate, item.endDate);
         return `<div class="flex-shrink-0 rounded-lg px-3 py-2 surface border border-base" style="border-left:4px solid ${item.color};min-width:108px;box-shadow:var(--shadow)">
           <div class="text-[11px] font-bold" style="color:${dd.tone}">${dd.text}</div>
           <div class="text-xs mt-0.5 truncate text-base" style="max-width:100px">${esc(item.emoji)} ${esc(item.title)}</div>
@@ -595,7 +597,7 @@ function openEventForm(ev){
   FORM = ev ? { ...ev } : {
     id: null, title:"", emoji:"", category:(S.categories[0]?S.categories[0].key:"homework"), color:(S.categories[0]?S.categories[0].color:"#D98A2B"),
     startDate:S.selectedDate, endDate:S.selectedDate, hasTime:false, startTime:"09:00", endTime:"10:00",
-    description:"", memo:""
+    description:"", memo:"", showAsDday:false
   };
   renderEventForm();
 }
@@ -648,6 +650,8 @@ function renderEventForm(){
         </div>
         <div>
           <button id="f-time-toggle" class="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-bold" style="background:${f.hasTime?'#2E3153':'var(--bg-soft)'};color:${f.hasTime?'#fff':'var(--text-soft)'}">🕐 시간 설정 ${f.hasTime?"끄기":"켜기"}</button>
+          <button id="f-dday-toggle" class="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md font-bold ml-1.5" style="background:${f.showAsDday?'#2E3153':'var(--bg-soft)'};color:${f.showAsDday?'#fff':'var(--text-soft)'}">🔥 디데이로 등록 ${f.showAsDday?"끄기":"켜기"}</button>
+          <p class="text-[10px] text-faint mt-1">켜면 시작일을 기준으로 상단 디데이 목록에도 함께 표시돼요. 기간 중에는 "진행중"으로 보여요.</p>
           <div id="time-fields" class="flex gap-2 mt-2" style="display:${f.hasTime?'flex':'none'}">
             <div class="flex-1"><label class="text-xs text-soft">시작 시간</label>
               <input id="f-stime" type="time" value="${f.startTime}" class="w-full rounded-md px-2 py-2 text-sm mt-1 outline-none border" /></div>
@@ -697,6 +701,13 @@ function bindEventFormListeners(){
     btn.style.color = FORM.hasTime ? "#fff" : "var(--text-soft)";
     btn.textContent = `🕐 시간 설정 ${FORM.hasTime?"끄기":"켜기"}`;
   };
+  document.getElementById("f-dday-toggle").onclick = ()=>{
+    FORM.showAsDday = !FORM.showAsDday;
+    const btn = document.getElementById("f-dday-toggle");
+    btn.style.background = FORM.showAsDday ? "#2E3153" : "var(--bg-soft)";
+    btn.style.color = FORM.showAsDday ? "#fff" : "var(--text-soft)";
+    btn.textContent = `🔥 디데이로 등록 ${FORM.showAsDday?"끄기":"켜기"}`;
+  };
   document.getElementById("f-submit").onclick = submitEventForm;
 }
 function renderEventFormPreserving(){
@@ -730,6 +741,7 @@ function submitEventForm(){
     endTime: document.getElementById("f-etime") ? document.getElementById("f-etime").value : "",
     description: document.getElementById("f-desc").value,
     memo: document.getElementById("f-memo").value,
+    showAsDday: !!FORM.showAsDday,
   };
   if (FORM.id) S.events = S.events.map(ev=> ev.id===FORM.id ? payload : ev);
   else S.events = [...S.events, payload];
