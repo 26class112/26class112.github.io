@@ -233,13 +233,27 @@ async function loadFromServer(){
   render();
 }
 async function saveToServer(){
+  const body = JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner, categories: S.categories, posts: S.posts, postCategories: S.postCategories });
+  const sizeKB = Math.round(new Blob([body]).size / 1024);
+  if (sizeKB > 950){
+    showToast(`⚠️ 저장 실패: 데이터 용량(${sizeKB}KB)이 너무 커요. 사진을 줄이거나 오래된 게시글을 지워주세요.`);
+    return false;
+  }
   try {
-    await fetch(DATA_URL, {
+    const res = await fetch(DATA_URL, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
-      body: JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner, categories: S.categories, posts: S.posts, postCategories: S.postCategories }),
+      body,
     });
-  } catch (e) {}
+    if (!res.ok){
+      showToast("⚠️ 저장 실패했어요. 잠시 후 다시 시도해 주세요.");
+      return false;
+    }
+    return true;
+  } catch (e) {
+    showToast("⚠️ 저장 실패했어요. 인터넷 연결을 확인해 주세요.");
+    return false;
+  }
 }
 setInterval(()=>{
   const modalOpen = document.getElementById("modal-root") && document.getElementById("modal-root").innerHTML.trim()!=="";
@@ -1131,13 +1145,13 @@ function compressImage(file){
     reader.onload = (e)=>{
       const img = new Image();
       img.onload = ()=>{
-        const maxW = 900;
+        const maxW = 700;
         const scale = Math.min(1, maxW / img.width);
         const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
         const canvas = document.createElement("canvas");
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
       };
       img.onerror = ()=>reject(new Error("이미지를 읽지 못했어요"));
       img.src = e.target.result;
@@ -1232,6 +1246,7 @@ function renderPostForm(){
         <div>
           <label class="text-xs text-soft">사진 (여러 장 가능)</label>
           <input id="p-image-input" type="file" accept="image/*" multiple class="w-full text-xs mt-1" />
+          <p class="text-[10px] text-faint mt-1">사진은 자동으로 압축돼요. 너무 많이 첨부하면 저장이 안 될 수 있어요 (한 게시글에 3~4장 이하 권장).</p>
           <div id="p-image-preview" class="flex flex-wrap gap-2 mt-2">
             ${f.images.map((src,i)=>`<div class="relative" data-img-wrap="${i}"><img src="${src}" style="width:64px;height:64px;object-fit:cover;border-radius:6px" /><button data-img-remove="${i}" class="absolute text-white rounded-full flex items-center justify-center" style="top:-4px;right:-4px;width:18px;height:18px;background:#B23A32;font-size:10px">✕</button></div>`).join("")}
           </div>
