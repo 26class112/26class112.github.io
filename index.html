@@ -198,6 +198,9 @@ const S = {
   redDays: [],
   categories: DEFAULT_CATEGORIES.map(c=>({...c})),
   banner: { lines: [] },
+  posts: [],
+  postCategories: [],
+  selectedPostId: null,
   isAdmin: false,
   theme: localStorage.getItem("theme") === "dark" ? "dark" : "light",
   calendarStyle: localStorage.getItem("calendarStyle") === "table" ? "table" : "compact",
@@ -223,6 +226,8 @@ async function loadFromServer(){
     S.redDays = Array.isArray(data.redDays) ? data.redDays : [];
     S.categories = Array.isArray(data.categories) && data.categories.length>0 ? data.categories : DEFAULT_CATEGORIES.map(c=>({...c}));
     S.banner = data.banner && Array.isArray(data.banner.lines) ? data.banner : { lines: [] };
+    S.posts = Array.isArray(data.posts) ? data.posts : [];
+    S.postCategories = Array.isArray(data.postCategories) ? data.postCategories : [];
   } catch (e) {}
   S.loading = false;
   render();
@@ -232,7 +237,7 @@ async function saveToServer(){
     await fetch(DATA_URL, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
-      body: JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner, categories: S.categories }),
+      body: JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner, categories: S.categories, posts: S.posts, postCategories: S.postCategories }),
     });
   } catch (e) {}
 }
@@ -339,12 +344,14 @@ function render(){
       <button data-action="go-page" data-page="calendar" class="w-full text-left px-4 py-2.5 text-sm ${S.page==='calendar'?'font-bold':''} text-base" style="background:${S.page==='calendar'?'var(--bg-soft)':'transparent'}">📅 캘린더</button>
       <button data-action="go-page" data-page="timetable" class="w-full text-left px-4 py-2.5 text-sm ${S.page==='timetable'?'font-bold':''} text-base" style="background:${S.page==='timetable'?'var(--bg-soft)':'transparent'}">🗓 시간표</button>
       <button data-action="go-page" data-page="meal" class="w-full text-left px-4 py-2.5 text-sm ${S.page==='meal'?'font-bold':''} text-base" style="background:${S.page==='meal'?'var(--bg-soft)':'transparent'}">🍚 급식</button>
+      <button data-action="go-page" data-page="board" class="w-full text-left px-4 py-2.5 text-sm ${S.page==='board'?'font-bold':''} text-base" style="background:${S.page==='board'?'var(--bg-soft)':'transparent'}">📋 게시판</button>
       ${S.isAdmin ? `<div class="px-4 py-2 text-[10px] text-faint border-t border-base">🔓 관리자 모드</div>` : ""}
     </div>` : ""}
   </div>`;
 
   if (S.page === "timetable") { html += renderTimetablePage(); document.getElementById("app").innerHTML = html; return; }
   if (S.page === "meal") { html += renderMealPage(); document.getElementById("app").innerHTML = html; return; }
+  if (S.page === "board") { html += renderBoardPage(); document.getElementById("app").innerHTML = html; return; }
 
   // 고정 알림 배너
   if (S.banner.lines.length>0 || S.isAdmin){
@@ -559,6 +566,13 @@ document.addEventListener("click", (e)=>{
   else if (action==="open-dday-manage"){ openDdayManage(); }
   else if (action==="open-redday-manage"){ openRedDayManage(); }
   else if (action==="open-category-manage"){ openCategoryManage(); }
+  else if (action==="open-post"){ S.selectedPostId = id; render(); }
+  else if (action==="back-to-board-list"){ S.selectedPostId = null; render(); }
+  else if (action==="open-add-post"){ openPostForm(null); }
+  else if (action==="open-edit-post"){ openPostForm(S.posts.find(p=>p.id===id)); }
+  else if (action==="confirm-delete-post"){ S.confirmDeletePostId = id; render(); }
+  else if (action==="delete-post"){ S.posts = S.posts.filter(p=>p.id!==id); saveToServer(); S.confirmDeletePostId=null; S.selectedPostId=null; render(); showToast("게시글을 삭제했어요"); }
+  else if (action==="open-post-category-manage"){ openPostCategoryManage(); }
   else if (action==="open-banner-manage"){ openBannerManage(); }
   else if (action==="close-modal"){ closeModal(); }
 });
@@ -1108,6 +1122,245 @@ function renderMealPage(){
     ${body}
     <p class="text-[11px] text-faint text-center mt-3">NEIS 교육정보 개방 포털 제공</p>
   </div>`;
+}
+
+/* ---- 이미지 압축 (jsonbin 용량 제한 대응) ---- */
+function compressImage(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const maxW = 900;
+        const scale = Math.min(1, maxW / img.width);
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = ()=>reject(new Error("이미지를 읽지 못했어요"));
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=>reject(new Error("파일을 읽지 못했어요"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---- 게시판 페이지 ---- */
+function getPostCategory(key){
+  return S.postCategories.find(c=>c.key===key) || { key:key||"", label:key||"기타", color:"#9b9a97" };
+}
+function renderBoardPage(){
+  if (S.selectedPostId){
+    const post = S.posts.find(p=>p.id===S.selectedPostId);
+    if (!post) { S.selectedPostId = null; return renderBoardPage(); }
+    const cat = getPostCategory(post.category);
+    const tone = tagStyle(cat.color, S.theme);
+    return `<div class="max-w-2xl mx-auto px-5">
+      <button data-action="back-to-board-list" class="text-sm text-soft mb-3">‹ 목록으로</button>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-xs px-2 py-0.5 rounded-full font-bold" style="background:${tone.bg};color:${tone.text}">${esc(cat.label)}</span>
+        <span class="text-xs text-faint">${post.date}</span>
+      </div>
+      <h2 class="text-lg font-bold mb-3 text-base">${esc(post.title)}</h2>
+      ${(post.images||[]).map(src=>`<img src="${src}" class="w-full rounded-lg mb-2 border border-base" />`).join("")}
+      <p class="text-sm mt-2 text-base" style="white-space:pre-line">${esc(post.description)}</p>
+      ${S.isAdmin ? `<div class="flex gap-2 mt-4">
+        <button data-action="open-edit-post" data-id="${post.id}" class="px-3 py-1.5 rounded-md text-xs font-bold surface-soft text-soft">✎ 수정</button>
+        ${S.confirmDeletePostId===post.id
+          ? `<button data-action="delete-post" data-id="${post.id}" class="px-3 py-1.5 rounded-md text-xs font-bold text-white" style="background:#B23A32">삭제 확인</button>`
+          : `<button data-action="confirm-delete-post" data-id="${post.id}" class="px-3 py-1.5 rounded-md text-xs font-bold surface-soft text-soft">🗑 삭제</button>`}
+      </div>` : ""}
+    </div>`;
+  }
+  const sorted = [...S.posts].sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  return `<div class="max-w-2xl mx-auto px-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-base font-bold text-base">📋 게시판</h2>
+      ${S.isAdmin ? `<button data-action="open-add-post" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full text-white" style="background:#2E3153">＋ 글쓰기</button>` : ""}
+    </div>
+    ${sorted.length===0 ? `<p class="text-sm py-10 text-center rounded-lg surface-soft text-faint">등록된 게시글이 없어요.</p>` :
+      `<ul class="flex flex-col gap-2">${sorted.map(post=>{
+        const cat = getPostCategory(post.category);
+        const tone = tagStyle(cat.color, S.theme);
+        return `<li data-action="open-post" data-id="${post.id}" class="rounded-lg p-3 surface border border-base" style="box-shadow:var(--shadow);cursor:pointer">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-bold" style="background:${tone.bg};color:${tone.text}">${esc(cat.label)}</span>
+            <span class="text-[11px] text-faint">${post.date}</span>
+          </div>
+          <div class="text-sm font-bold text-base">${esc(post.title)}</div>
+          ${post.images && post.images.length>0 ? `<div class="text-[11px] text-faint mt-1">📷 사진 ${post.images.length}장</div>` : ""}
+        </li>`;
+      }).join("")}</ul>`}
+  </div>`;
+}
+
+/* ---- 게시글 작성/수정 모달 ---- */
+let PFORM = null;
+function openPostForm(post){
+  PFORM = post ? { ...post, images:[...(post.images||[])] } : {
+    id:null, title:"", category:(S.postCategories[0]?S.postCategories[0].key:""), images:[], description:"", date:todayStr, createdAt:Date.now()
+  };
+  renderPostForm();
+}
+function renderPostForm(){
+  const f = PFORM;
+  document.getElementById("modal-root").innerHTML = `
+  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto surface border border-base" style="max-height:88vh">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-base">${f.id?"게시글 수정":"게시글 작성"}</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
+      </div>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-soft">유형</label>
+          <div id="pcat-buttons" class="flex flex-wrap gap-1.5 mt-1">
+            ${S.postCategories.map(c=>{
+              const tone = tagStyle(c.color, S.theme);
+              const active = f.category===c.key;
+              return `<button data-pcat="${c.key}" class="pcat-btn text-xs px-2.5 py-1.5 rounded-full font-bold" style="background:${active?'#2E3153':tone.bg};color:${active?'#fff':tone.text}">${esc(c.label)}</button>`;
+            }).join("")}
+          </div>
+          <button data-action="open-post-category-manage" class="text-[11px] underline text-soft mt-1">유형 관리</button>
+        </div>
+        <div>
+          <label class="text-xs text-soft">제목</label>
+          <input id="p-title" type="text" value="${esc(f.title)}" placeholder="예: 2학기 수행평가 안내" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none border" />
+        </div>
+        <div>
+          <label class="text-xs text-soft">사진 (여러 장 가능)</label>
+          <input id="p-image-input" type="file" accept="image/*" multiple class="w-full text-xs mt-1" />
+          <div id="p-image-preview" class="flex flex-wrap gap-2 mt-2">
+            ${f.images.map((src,i)=>`<div class="relative" data-img-wrap="${i}"><img src="${src}" style="width:64px;height:64px;object-fit:cover;border-radius:6px" /><button data-img-remove="${i}" class="absolute text-white rounded-full flex items-center justify-center" style="top:-4px;right:-4px;width:18px;height:18px;background:#B23A32;font-size:10px">✕</button></div>`).join("")}
+          </div>
+        </div>
+        <div>
+          <label class="text-xs text-soft">설명</label>
+          <textarea id="p-desc" rows="5" placeholder="안내 내용을 입력해 주세요" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none resize-none border">${esc(f.description)}</textarea>
+        </div>
+        <button id="p-submit" class="w-full mt-1 rounded-md py-2.5 text-sm text-white font-bold" style="background:#2E3153">${f.id?"수정 완료":"게시하기"}</button>
+      </div>
+    </div>
+  </div>`;
+  bindPostFormListeners();
+}
+function bindPostFormListeners(){
+  document.querySelectorAll(".pcat-btn").forEach(btn=>{
+    btn.onclick = ()=>{
+      PFORM.title = document.getElementById("p-title").value;
+      PFORM.description = document.getElementById("p-desc").value;
+      PFORM.category = btn.dataset.pcat;
+      renderPostForm();
+    };
+  });
+  document.getElementById("p-image-input").addEventListener("change", async (e)=>{
+    const files = Array.from(e.target.files || []);
+    if (files.length===0) return;
+    showToast("이미지 처리 중...");
+    for (const file of files){
+      try {
+        const dataUrl = await compressImage(file);
+        PFORM.images.push(dataUrl);
+      } catch (err){}
+    }
+    PFORM.title = document.getElementById("p-title").value;
+    PFORM.description = document.getElementById("p-desc").value;
+    renderPostForm();
+  });
+  document.getElementById("p-image-preview").addEventListener("click", (e)=>{
+    const b = e.target.closest("[data-img-remove]");
+    if (b){
+      PFORM.images.splice(Number(b.dataset.imgRemove), 1);
+      PFORM.title = document.getElementById("p-title").value;
+      PFORM.description = document.getElementById("p-desc").value;
+      renderPostForm();
+    }
+  });
+  document.getElementById("p-submit").onclick = ()=>{
+    const title = document.getElementById("p-title").value.trim();
+    const description = document.getElementById("p-desc").value;
+    if (!title){ showToast("제목을 입력해 주세요"); return; }
+    const payload = { id: PFORM.id || uid(), title, category: PFORM.category, images: PFORM.images, description, date: PFORM.date || todayStr, createdAt: PFORM.createdAt || Date.now() };
+    if (PFORM.id) S.posts = S.posts.map(p=> p.id===PFORM.id ? payload : p);
+    else S.posts = [...S.posts, payload];
+    saveToServer();
+    closeModal();
+    render();
+    showToast(PFORM.id ? "게시글을 수정했어요" : "게시글을 올렸어요");
+  };
+}
+
+/* ---- 게시판 유형 관리 모달 ---- */
+let PCFORM = null;
+function openPostCategoryManage(){ PCFORM = null; renderPostCategoryManage(); }
+function renderPostCategoryManage(){
+  const f = PCFORM || { label:"", color:SWATCHES[0] };
+  document.getElementById("modal-root").innerHTML = `
+  <div class="fixed inset-0 flex items-end sm:items-center justify-center z-50" style="background:rgba(0,0,0,0.45)">
+    <div class="rounded-t-2xl sm:rounded-xl p-5 w-full max-w-md overflow-y-auto surface border border-base" style="max-height:88vh">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-base">게시판 유형 관리</h3>
+        <button data-action="close-modal" class="text-soft">✕</button>
+      </div>
+      ${S.postCategories.length>0 ? `<ul class="flex flex-col gap-1.5 mb-4">${S.postCategories.map(c=>{
+        const tone = tagStyle(c.color, S.theme);
+        return `<li class="rounded-md px-3 py-2 flex items-center justify-between surface-soft">
+          <span class="text-xs px-2 py-0.5 rounded-full font-bold" style="background:${tone.bg};color:${tone.text}">${esc(c.label)}</span>
+          <div class="flex gap-1 flex-shrink-0">
+            <button data-pcat-edit="${c.key}" class="p-1.5 rounded-md surface">✎</button>
+            ${S.confirmDeletePcatId===c.key
+              ? `<button data-pcat-delete="${c.key}" class="p-1.5 rounded-md text-white text-[10px] px-2" style="background:#B23A32">확인</button>`
+              : `<button data-pcat-confirm-delete="${c.key}" class="p-1.5 rounded-md surface">🗑</button>`}
+          </div>
+        </li>`;
+      }).join("")}</ul>` : `<p class="text-xs text-faint mb-4">등록된 유형이 없어요.</p>`}
+      <div class="flex flex-col gap-3 pt-3 border-t border-base">
+        <p class="text-xs font-bold text-soft">${f.key?"유형 수정":"새 유형 추가"}</p>
+        <input id="pc-label" type="text" value="${esc(f.label)}" placeholder="예: 수행평가 안내문" class="w-full rounded-md px-3 py-2 text-sm outline-none border" />
+        <div>
+          <label class="text-xs text-soft">색상</label>
+          <div class="flex items-center gap-2 mt-1">
+            <input id="pc-color" type="color" value="${f.color}" class="h-9 border rounded-md" style="width:44px" />
+            <div class="flex flex-wrap gap-1">${SWATCHES.map(s=>`<button data-pccolor-pick="${s}" style="width:14px;height:14px;border-radius:50%;background:${s}"></button>`).join("")}</div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          ${f.key ? `<button id="pc-cancel" class="flex-1 rounded-md py-2.5 text-sm font-bold surface-soft text-soft">취소</button>` : ""}
+          <button id="pc-submit" class="flex-1 rounded-md py-2.5 text-sm text-white font-bold" style="background:#2E3153">${f.key?"수정 완료":"추가하기"}</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  bindPostCategoryListeners();
+}
+function bindPostCategoryListeners(){
+  document.querySelectorAll("[data-pcat-edit]").forEach(btn=>{
+    btn.onclick = ()=>{ const item = S.postCategories.find(c=>c.key===btn.dataset.pcatEdit); PCFORM = { ...item }; renderPostCategoryManage(); };
+  });
+  document.querySelectorAll("[data-pcat-confirm-delete]").forEach(btn=>{
+    btn.onclick = ()=>{ S.confirmDeletePcatId = btn.dataset.pcatConfirmDelete; renderPostCategoryManage(); };
+  });
+  document.querySelectorAll("[data-pcat-delete]").forEach(btn=>{
+    btn.onclick = ()=>{ S.postCategories = S.postCategories.filter(c=>c.key!==btn.dataset.pcatDelete); saveToServer(); S.confirmDeletePcatId=null; renderPostCategoryManage(); showToast("삭제했어요"); };
+  });
+  document.querySelectorAll("[data-pccolor-pick]").forEach(btn=>{
+    btn.onclick = ()=>{ document.getElementById("pc-color").value = btn.dataset.pccolorPick; };
+  });
+  const cancelBtn = document.getElementById("pc-cancel");
+  if (cancelBtn) cancelBtn.onclick = ()=>{ PCFORM=null; renderPostCategoryManage(); };
+  document.getElementById("pc-submit").onclick = ()=>{
+    const label = document.getElementById("pc-label").value.trim();
+    const color = document.getElementById("pc-color").value;
+    if (!label){ showToast("이름을 입력해 주세요"); return; }
+    if (PCFORM && PCFORM.key) S.postCategories = S.postCategories.map(c=> c.key===PCFORM.key ? { ...c, label, color } : c);
+    else S.postCategories = [...S.postCategories, { key: uid(), label, color }];
+    saveToServer();
+    PCFORM = null;
+    renderPostCategoryManage();
+    showToast("저장했어요");
+  };
 }
 
 /* ---- 시작 ---- */
