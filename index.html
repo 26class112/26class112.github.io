@@ -205,6 +205,9 @@ const S = {
   theme: localStorage.getItem("theme") === "dark" ? "dark" : "light",
   calendarStyle: localStorage.getItem("calendarStyle") === "table" ? "table" : "compact",
   page: "calendar",
+  boardFilter: null,
+  boardSort: "desc",
+  boardSearch: "",
   menuOpen: false,
   mealDate: todayStr,
   mealLoading: false,
@@ -371,7 +374,7 @@ function render(){
 
   if (S.page === "timetable") { html += renderTimetablePage(); document.getElementById("app").innerHTML = html; return; }
   if (S.page === "meal") { html += renderMealPage(); document.getElementById("app").innerHTML = html; return; }
-  if (S.page === "board") { html += renderBoardPage(); document.getElementById("app").innerHTML = html; return; }
+  if (S.page === "board") { html += renderBoardPage(); document.getElementById("app").innerHTML = html; bindBoardPageListeners(); return; }
 
   // 고정 알림 배너
   if (S.banner.lines.length>0 || S.isAdmin){
@@ -593,6 +596,8 @@ document.addEventListener("click", (e)=>{
   else if (action==="confirm-delete-post"){ S.confirmDeletePostId = id; render(); }
   else if (action==="delete-post"){ S.posts = S.posts.filter(p=>p.id!==id); saveToServer(); S.confirmDeletePostId=null; S.selectedPostId=null; render(); showToast("게시글을 삭제했어요"); }
   else if (action==="open-post-category-manage"){ openPostCategoryManage(); }
+  else if (action==="board-filter"){ S.boardFilter = el.dataset.cat || null; render(); }
+  else if (action==="board-sort-toggle"){ S.boardSort = S.boardSort==="desc" ? "asc" : "desc"; render(); }
   else if (action==="open-banner-manage"){ openBannerManage(); }
   else if (action==="close-modal"){ closeModal(); }
 });
@@ -1186,14 +1191,35 @@ function renderBoardPage(){
       </div>` : ""}
     </div>`;
   }
-  const sorted = [...S.posts].sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  const filterPills = `
+    <button data-action="board-filter" class="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0" style="background:${S.boardFilter===null?'#2E3153':'var(--bg-soft)'};color:${S.boardFilter===null?'#fff':'var(--text-soft)'}">전체</button>
+    ${S.postCategories.map(c=>{
+      const tone = tagStyle(c.color, S.theme);
+      const active = S.boardFilter===c.key;
+      return `<button data-action="board-filter" data-cat="${c.key}" class="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0" style="background:${active?'#2E3153':tone.bg};color:${active?'#fff':tone.text}">${esc(c.label)}</button>`;
+    }).join("")}
+  `;
   return `<div class="max-w-2xl mx-auto px-5">
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-base font-bold text-base">📋 게시판</h2>
       ${S.isAdmin ? `<button data-action="open-add-post" class="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full text-white" style="background:#2E3153">＋ 글쓰기</button>` : ""}
     </div>
-    ${sorted.length===0 ? `<p class="text-sm py-10 text-center rounded-lg surface-soft text-faint">등록된 게시글이 없어요.</p>` :
-      `<ul class="flex flex-col gap-2">${sorted.map(post=>{
+    <input id="board-search" type="text" value="${esc(S.boardSearch)}" placeholder="제목·내용 검색" class="w-full rounded-md px-3 py-2 text-sm mb-2 outline-none border" />
+    <div class="flex items-center justify-between mb-3 gap-2">
+      <div class="flex gap-1.5 overflow-x-auto">${filterPills}</div>
+      <button data-action="board-sort-toggle" class="text-[11px] px-2 py-1 rounded-md flex-shrink-0 surface-soft text-soft">${S.boardSort==='desc'?'최신순 ▾':'오래된순 ▴'}</button>
+    </div>
+    <div id="board-list-container">${buildBoardListHTML()}</div>
+  </div>`;
+}
+function buildBoardListHTML(){
+  let list = [...S.posts];
+  if (S.boardFilter) list = list.filter(p=>p.category===S.boardFilter);
+  const q = (S.boardSearch||"").trim().toLowerCase();
+  if (q) list = list.filter(p=> (p.title||"").toLowerCase().includes(q) || (p.description||"").toLowerCase().includes(q));
+  list.sort((a,b)=> S.boardSort==='desc' ? (b.createdAt||0)-(a.createdAt||0) : (a.createdAt||0)-(b.createdAt||0));
+  if (list.length===0) return `<p class="text-sm py-10 text-center rounded-lg surface-soft text-faint">해당하는 게시글이 없어요.</p>`;
+  return `<ul class="flex flex-col gap-2">${list.map(post=>{
         const cat = getPostCategory(post.category);
         const tone = tagStyle(cat.color, S.theme);
         return `<li data-action="open-post" data-id="${post.id}" class="rounded-lg p-3 surface border border-base" style="box-shadow:var(--shadow);cursor:pointer">
@@ -1204,8 +1230,17 @@ function renderBoardPage(){
           <div class="text-sm font-bold text-base">${esc(post.title)}</div>
           ${post.images && post.images.length>0 ? `<div class="text-[11px] text-faint mt-1">📷 사진 ${post.images.length}장</div>` : ""}
         </li>`;
-      }).join("")}</ul>`}
-  </div>`;
+      }).join("")}</ul>`;
+}
+function bindBoardPageListeners(){
+  const input = document.getElementById("board-search");
+  if (input){
+    input.oninput = ()=>{
+      S.boardSearch = input.value;
+      const c = document.getElementById("board-list-container");
+      if (c) c.innerHTML = buildBoardListHTML();
+    };
+  }
 }
 
 /* ---- 게시글 작성/수정 모달 ---- */
