@@ -1144,27 +1144,19 @@ function renderMealPage(){
   </div>`;
 }
 
-/* ---- 이미지 압축 (jsonbin 용량 제한 대응) ---- */
-function compressImage(file){
-  return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = (e)=>{
-      const img = new Image();
-      img.onload = ()=>{
-        const maxW = 700;
-        const scale = Math.min(1, maxW / img.width);
-        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.6));
-      };
-      img.onerror = ()=>reject(new Error("이미지를 읽지 못했어요"));
-      img.src = e.target.result;
-    };
-    reader.onerror = ()=>reject(new Error("파일을 읽지 못했어요"));
-    reader.readAsDataURL(file);
+/* ---- 사진: imgbb.com에 업로드 (jsonbin 용량 문제 해결, 화질 그대로) ---- */
+const IMGBB_API_KEY = "a2fb55fe076454eca781d71e779ca46b";
+async function uploadToImgbb(file){
+  const formData = new FormData();
+  formData.append("image", file);
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+    method: "POST",
+    body: formData,
   });
+  if (!res.ok) throw new Error("업로드 실패");
+  const data = await res.json();
+  if (!data.success) throw new Error("업로드 실패");
+  return data.data.url;
 }
 
 /* ---- 게시판 페이지 ---- */
@@ -1252,7 +1244,7 @@ function renderPostForm(){
         <div>
           <label class="text-xs text-soft">사진 (여러 장 가능)</label>
           <input id="p-image-input" type="file" accept="image/*" multiple class="w-full text-xs mt-1" />
-          <p class="text-[10px] text-faint mt-1">사진은 자동으로 압축돼요. 너무 많이 첨부하면 저장이 안 될 수 있어요 (한 게시글에 3~4장 이하 권장).</p>
+          <p class="text-[10px] text-faint mt-1">사진은 원본 화질로 안전하게 별도 저장돼요. 업로드에 몇 초 걸릴 수 있어요.</p>
           <div id="p-image-preview" class="flex flex-wrap gap-2 mt-2">
             ${f.images.map((src,i)=>`<div class="relative" data-img-wrap="${i}"><img src="${src}" style="width:64px;height:64px;object-fit:cover;border-radius:6px" /><button data-img-remove="${i}" class="absolute text-white rounded-full flex items-center justify-center" style="top:-4px;right:-4px;width:18px;height:18px;background:#B23A32;font-size:10px">✕</button></div>`).join("")}
           </div>
@@ -1279,16 +1271,19 @@ function bindPostFormListeners(){
   document.getElementById("p-image-input").addEventListener("change", async (e)=>{
     const files = Array.from(e.target.files || []);
     if (files.length===0) return;
-    showToast("이미지 처리 중...");
+    showToast(`사진 업로드 중... (${files.length}장)`);
+    let failCount = 0;
     for (const file of files){
       try {
-        const dataUrl = await compressImage(file);
-        PFORM.images.push(dataUrl);
-      } catch (err){}
+        const url = await uploadToImgbb(file);
+        PFORM.images.push(url);
+      } catch (err){ failCount++; }
     }
     PFORM.title = document.getElementById("p-title").value;
     PFORM.description = document.getElementById("p-desc").value;
     renderPostForm();
+    if (failCount>0) showToast(`⚠️ ${failCount}장 업로드 실패했어요`);
+    else showToast("업로드 완료!");
   });
   document.getElementById("p-image-preview").addEventListener("click", (e)=>{
     const b = e.target.closest("[data-img-remove]");
