@@ -1183,6 +1183,7 @@ function renderBoardPage(){
       <h2 class="text-lg font-bold mb-3 text-base">${esc(post.title)}</h2>
       ${(post.images||[]).map(src=>`<img src="${src}" class="w-full rounded-lg mb-2 border border-base" />`).join("")}
       <p class="text-sm mt-2 text-base" style="white-space:pre-line">${esc(post.description)}</p>
+      ${post.link ? `<a href="${esc(post.link)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 mt-3 px-3 py-1.5 rounded-md text-xs font-bold text-white" style="background:#3E76A0">🔗 바로가기</a>` : ""}
       ${S.isAdmin ? `<div class="flex gap-2 mt-4">
         <button data-action="open-edit-post" data-id="${post.id}" class="px-3 py-1.5 rounded-md text-xs font-bold surface-soft text-soft">✎ 수정</button>
         ${S.confirmDeletePostId===post.id
@@ -1228,7 +1229,10 @@ function buildBoardListHTML(){
             <span class="text-[11px] text-faint">${post.date}</span>
           </div>
           <div class="text-sm font-bold text-base">${esc(post.title)}</div>
-          ${post.images && post.images.length>0 ? `<div class="text-[11px] text-faint mt-1">📷 사진 ${post.images.length}장</div>` : ""}
+          <div class="flex items-center gap-2 mt-1">
+            ${post.images && post.images.length>0 ? `<span class="text-[11px] text-faint">📷 ${post.images.length}장</span>` : ""}
+            ${post.link ? `<span class="text-[11px] text-faint">🔗 링크</span>` : ""}
+          </div>
         </li>`;
       }).join("")}</ul>`;
 }
@@ -1247,7 +1251,7 @@ function bindBoardPageListeners(){
 let PFORM = null;
 function openPostForm(post){
   PFORM = post ? { ...post, images:[...(post.images||[])] } : {
-    id:null, title:"", category:(S.postCategories[0]?S.postCategories[0].key:""), images:[], description:"", date:todayStr, createdAt:Date.now()
+    id:null, title:"", category:(S.postCategories[0]?S.postCategories[0].key:""), images:[], description:"", link:"", date:todayStr, createdAt:Date.now()
   };
   renderPostForm();
 }
@@ -1288,6 +1292,11 @@ function renderPostForm(){
           <label class="text-xs text-soft">설명</label>
           <textarea id="p-desc" rows="5" placeholder="안내 내용을 입력해 주세요" class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none resize-none border">${esc(f.description)}</textarea>
         </div>
+        <div>
+          <label class="text-xs text-soft">링크 (선택)</label>
+          <input id="p-link" type="url" value="${esc(f.link||'')}" placeholder="https://..." class="w-full rounded-md px-3 py-2 text-sm mt-1 outline-none border" />
+          <p class="text-[10px] text-faint mt-1">입력하면 게시글에 "바로가기" 버튼이 생겨요.</p>
+        </div>
         <button id="p-submit" class="w-full mt-1 rounded-md py-2.5 text-sm text-white font-bold" style="background:#2E3153">${f.id?"수정 완료":"게시하기"}</button>
       </div>
     </div>
@@ -1299,6 +1308,7 @@ function bindPostFormListeners(){
     btn.onclick = ()=>{
       PFORM.title = document.getElementById("p-title").value;
       PFORM.description = document.getElementById("p-desc").value;
+      PFORM.link = document.getElementById("p-link").value;
       PFORM.category = btn.dataset.pcat;
       renderPostForm();
     };
@@ -1316,6 +1326,7 @@ function bindPostFormListeners(){
     }
     PFORM.title = document.getElementById("p-title").value;
     PFORM.description = document.getElementById("p-desc").value;
+      PFORM.link = document.getElementById("p-link").value;
     renderPostForm();
     if (failCount>0) showToast(`⚠️ ${failCount}장 업로드 실패했어요`);
     else showToast("업로드 완료!");
@@ -1326,6 +1337,7 @@ function bindPostFormListeners(){
       PFORM.images.splice(Number(b.dataset.imgRemove), 1);
       PFORM.title = document.getElementById("p-title").value;
       PFORM.description = document.getElementById("p-desc").value;
+      PFORM.link = document.getElementById("p-link").value;
       renderPostForm();
     }
   });
@@ -1333,7 +1345,7 @@ function bindPostFormListeners(){
     const title = document.getElementById("p-title").value.trim();
     const description = document.getElementById("p-desc").value;
     if (!title){ showToast("제목을 입력해 주세요"); return; }
-    const payload = { id: PFORM.id || uid(), title, category: PFORM.category, images: PFORM.images, description, date: PFORM.date || todayStr, createdAt: PFORM.createdAt || Date.now() };
+    const payload = { id: PFORM.id || uid(), title, category: PFORM.category, images: PFORM.images, description, link: document.getElementById("p-link").value.trim(), date: PFORM.date || todayStr, createdAt: PFORM.createdAt || Date.now() };
     if (PFORM.id) S.posts = S.posts.map(p=> p.id===PFORM.id ? payload : p);
     else S.posts = [...S.posts, payload];
     saveToServer();
