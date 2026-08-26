@@ -218,7 +218,10 @@ document.documentElement.setAttribute("data-theme", S.theme);
 /* ---- jsonbin 자동 불러오기/저장 ---- */
 async function loadFromServer(){
   try {
-    const res = await fetch(DATA_URL + "/latest", { headers: { "X-Master-Key": API_KEY, "X-Bin-Meta": "false" } });
+    const res = await fetch(DATA_URL + "/latest?t=" + Date.now(), {
+      cache: "no-store",
+      headers: { "X-Master-Key": API_KEY, "X-Bin-Meta": "false", "Cache-Control": "no-cache" },
+    });
     if (!res.ok) throw new Error("fetch failed");
     const data = await res.json();
     S.events = Array.isArray(data.events) ? data.events : [];
@@ -233,6 +236,7 @@ async function loadFromServer(){
   render();
 }
 async function saveToServer(){
+  S.lastSaveAt = Date.now();
   const body = JSON.stringify({ events: S.events, ddays: S.ddays, redDays: S.redDays, banner: S.banner, categories: S.categories, posts: S.posts, postCategories: S.postCategories });
   const sizeKB = Math.round(new Blob([body]).size / 1024);
   if (sizeKB > 950){
@@ -249,6 +253,7 @@ async function saveToServer(){
       showToast("⚠️ 저장 실패했어요. 잠시 후 다시 시도해 주세요.");
       return false;
     }
+    S.lastSaveAt = Date.now();
     return true;
   } catch (e) {
     showToast("⚠️ 저장 실패했어요. 인터넷 연결을 확인해 주세요.");
@@ -257,7 +262,8 @@ async function saveToServer(){
 }
 setInterval(()=>{
   const modalOpen = document.getElementById("modal-root") && document.getElementById("modal-root").innerHTML.trim()!=="";
-  if (!modalOpen) loadFromServer();
+  const justSaved = S.lastSaveAt && (Date.now() - S.lastSaveAt < 8000);
+  if (!modalOpen && !justSaved) loadFromServer();
 }, 20000);
 
 function showToast(msg){
